@@ -20,9 +20,6 @@ A lightweight Chrome extension to block Shorts, hide video suggestions, and disa
 
 ## 📦 Installation
 
-### From Chrome Web Store (Coming Soon)
-*Link will be added once published*
-
 ### Manual Installation (Developer Mode)
 
 1. Download or clone this repository
