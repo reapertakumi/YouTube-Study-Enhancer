@@ -1,0 +1,72 @@
+body {
+  margin: 0;
+  background: #121212;
+  color: #fff;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+.app {
+  width: 270px;
+  padding: 16px;
+}
+
+h1 {
+  font-size: 18px;
+  margin-bottom: 15px;
+  font-weight: 600;
+  opacity: 0.9;
+}
+
+.card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #1f1f1f;
+  padding: 14px;
+  border-radius: 16px;
+  margin-bottom: 10px;
+  transition: all 0.25s ease;
+}
+
+.card:hover {
+  background: #2a2a2a;
+  transform: translateY(-2px);
+}
+
+.switch {
+  position: relative;
+  width: 42px;
+  height: 22px;
+}
+
+.switch input {
+  display: none;
+}
+
+.slider {
+  position: absolute;
+  inset: 0;
+  background: #444;
+  border-radius: 20px;
+  transition: 0.3s;
+}
+
+.slider::before {
+  content: "";
+  position: absolute;
+  height: 18px;
+  width: 18px;
+  left: 2px;
+  top: 2px;
+  background: white;
+  border-radius: 50%;
+  transition: 0.3s;
+}
+
+input:checked + .slider {
+  background: #3ea6ff;
+}
+
+input:checked + .slider::before {
+  transform: translateX(20px);
+}
