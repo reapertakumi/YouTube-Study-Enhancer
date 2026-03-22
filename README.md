@@ -28,8 +28,8 @@ A lightweight Chrome extension to block Shorts, hide video suggestions, and disa
 1. Download or clone this repository
    ```bash
    git clone https://github.com/reapertakumi/youtube-study-enhancer.git
-   Open Chrome and go to chrome://extensions/
 
-2. Enable Developer Mode (toggle in top right corner)
-3. Click "Load unpacked"
-4. Select the youtube-study-enhancer folder
+2. Open Chrome and go to chrome://extensions/
+3. Enable Developer Mode (toggle in top right corner)
+4. Click "Load unpacked"
+5. Select the youtube-study-enhancer folder
