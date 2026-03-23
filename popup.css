@@ -220,3 +220,98 @@ input:checked + .slider {
 input:checked + .slider::before {
   transform: translateX(20px);
 }
+
+/* Updater Styles */
+.updater-card {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px;
+}
+
+.updater-info {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+#versionDisplay {
+  font-size: 12px;
+  opacity: 0.8;
+  font-weight: 500;
+}
+
+.update-status {
+  font-size: 11px;
+  opacity: 0.7;
+  font-family: monospace;
+}
+
+.update-status.checking {
+  color: #3ea6ff;
+  opacity: 1;
+}
+
+.update-status.available {
+  color: #4caf50;
+  opacity: 1;
+  font-weight: 500;
+}
+
+.update-status.error {
+  color: #f44336;
+  opacity: 1;
+}
+
+.update-status.up-to-date {
+  color: #4caf50;
+  opacity: 0.9;
+}
+
+.update-btn {
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: #3ea6ff;
+  color: white;
+}
+
+.update-btn:hover {
+  background: #2a8fdf;
+  transform: translateY(-1px);
+}
+
+.update-btn.install-btn {
+  background: #4caf50;
+}
+
+.update-btn.install-btn:hover {
+  background: #45a049;
+}
+
+.update-btn:active {
+  transform: translateY(0);
+}
+
+/* Light theme adjustments for updater */
+body.light-theme .update-status.checking {
+  color: #4a90e2;
+}
+
+body.light-theme .update-status.available {
+  color: #2e7d32;
+}
+
+body.light-theme .update-status.error {
+  color: #c62828;
+}
+
+body.light-theme .update-status.up-to-date {
+  color: #2e7d32;
+}

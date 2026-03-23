@@ -3,7 +3,7 @@
   "name": "YouTube Study Enhancer",
   "version": "0.1.5",
   "description": "Enhance your YouTube studying experience and block distracting sites",
-  "permissions": ["storage", "scripting"],
+  "permissions": ["storage", "scripting", "notifications"],
   "host_permissions": [
     "*://*.youtube.com/*",
     "*://*.instagram.com/*",
