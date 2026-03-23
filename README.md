@@ -36,7 +36,7 @@ A powerful Chrome extension that enhances your YouTube studying experience and b
 
 | Popup (Dark Mode) | Popup (Light Mode) | Blocked Site |
 |-------------------|-------------------|--------------|
-| ![Dark Mode](https://imgur.com/a/0LxMwlB) | ![Light Mode](https://imgur.com/a/gR9qTJ4) | ![Blocked](https://imgur.com/a/MhT9F4j) |
+| ![Dark Mode](https://imgur.com/a/0LxMwlB) | ![Light Mode](https://imgur.com/a/gR9qTJ4) | ![Blocked]([https://imgur.com/a/MhT9F4j](https://i.imgur.com/4cYKFOs.png)) |
 
 ---
 
