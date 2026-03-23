@@ -10,11 +10,44 @@ body {
   padding: 16px;
 }
 
+/* Header section with flex layout */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
 h1 {
   font-size: 18px;
-  margin-bottom: 15px;
   font-weight: 600;
   opacity: 0.9;
+  margin: 0;
+}
+
+/* Logo styling - BIGGER */
+.logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.logo img {
+  width: 40px;      /* Increased from 24px */
+  height: 40px;     /* Increased from 24px */
+  object-fit: contain;
+}
+
+/* Optional: Add hover effect */
+.logo img:hover {
+  transform: scale(1.05);
+  transition: transform 0.2s ease;
+}
+
+/* Alternative: if you want an even larger logo */
+.logo-large img {
+  width: 48px;
+  height: 48px;
 }
 
 .card {
@@ -46,7 +79,7 @@ h1 {
 .slider {
   position: absolute;
   inset: 0;
-  background: #444;
+  background: #7e1515;
   border-radius: 20px;
   transition: 0.3s;
 }

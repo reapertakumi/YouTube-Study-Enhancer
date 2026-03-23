@@ -1,4 +1,4 @@
-const ids = ["shorts", "speed", "sidebar"];
+const ids = ["shorts", "speed", "sidebar", "comments"];
 
 document.addEventListener("DOMContentLoaded", () => {
   chrome.storage.sync.get(ids, data => {
