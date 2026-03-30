@@ -1,26 +1,25 @@
-// background.js
-
-// Get version from manifest.json - no need to update here!
 const CURRENT_VERSION = chrome.runtime.getManifest().version;
 
 console.log("Background script loaded, version:", CURRENT_VERSION);
 
-// Check when extension is installed or updated
+const injectedTabs = new Set();
+
 chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason === 'install') {
     console.log('Extension installed');
-    // Set default settings
     chrome.storage.sync.set({
       speed: false,
       sidebar: false,
       comments: false,
       shorts: false,
+      blockYoutube: false,
       instagram: false,
       twitter: false,
       tiktok: false,
       reddit: false,
       pinterest: false,
-      theme: 'dark'
+      theme: 'dark',
+      customDomains: {}
     });
   } else if (details.reason === 'update') {
     console.log(`Extension updated from ${details.previousVersion} to ${CURRENT_VERSION}`);
@@ -28,7 +27,6 @@ chrome.runtime.onInstalled.addListener((details) => {
   }
 });
 
-// Function to show update notification
 function showUpdateNotification(oldVersion, newVersion) {
   if (chrome.notifications) {
     chrome.notifications.create({
@@ -41,44 +39,44 @@ function showUpdateNotification(oldVersion, newVersion) {
   }
 }
 
-// When a tab is updated, inject blocker if needed
+async function injectBlocker(tabId, url) {
+  // Skip chrome://, edge://, about: pages
+  if (!url || url.startsWith('chrome://') || url.startsWith('edge://') || url.startsWith('about:') || url.startsWith('chrome-extension://')) {
+    return;
+  }
+  
+  if (injectedTabs.has(tabId)) {
+    return;
+  }
+  
+  if (chrome.scripting && chrome.scripting.executeScript) {
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId: tabId },
+        files: ['blocker.js']
+      });
+      injectedTabs.add(tabId);
+      console.log("Successfully injected blocker into tab:", tabId, url);
+    } catch (err) {
+      console.log('Error injecting blocker:', err);
+    }
+  }
+}
+
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status === 'complete' && tab.url) {
-    const sitesToCheck = ['instagram.com', 'twitter.com', 'x.com', 'tiktok.com', 'reddit.com', 'pinterest.com'];
-    const shouldCheck = sitesToCheck.some(site => tab.url.includes(site));
-    
-    if (shouldCheck) {
-      console.log("Injecting blocker into:", tab.url);
-      
-      if (chrome.scripting && chrome.scripting.executeScript) {
-        chrome.scripting.executeScript({
-          target: { tabId: tabId },
-          files: ['blocker.js']
-        }).catch(err => {
-          console.log('Error injecting blocker:', err);
-        });
-      } else {
-        console.log("Scripting API not available");
-      }
-    }
+    injectBlocker(tabId, tab.url);
   }
 });
 
-// Also inject when tab is created
 chrome.tabs.onCreated.addListener((tab) => {
   if (tab.url) {
-    const sitesToCheck = ['instagram.com', 'twitter.com', 'x.com', 'tiktok.com', 'reddit.com', 'pinterest.com'];
-    const shouldCheck = sitesToCheck.some(site => tab.url.includes(site));
-    
-    if (shouldCheck && chrome.scripting && chrome.scripting.executeScript) {
-      setTimeout(() => {
-        chrome.scripting.executeScript({
-          target: { tabId: tab.id },
-          files: ['blocker.js']
-        }).catch(err => {
-          console.log('Error injecting blocker on creation:', err);
-        });
-      }, 1000);
-    }
+    setTimeout(() => {
+      injectBlocker(tab.id, tab.url);
+    }, 1000);
   }
+});
+
+chrome.tabs.onRemoved.addListener((tabId) => {
+  injectedTabs.delete(tabId);
 });

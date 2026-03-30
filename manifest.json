@@ -1,24 +1,10 @@
 {
   "manifest_version": 3,
   "name": "YouTube Study Enhancer",
-  "version": "0.1.5",
+  "version": "0.2.0",
   "description": "Enhance your YouTube studying experience and block distracting sites",
-  "permissions": ["storage", "scripting", "notifications"],
-  "host_permissions": [
-    "*://*.youtube.com/*",
-    "*://*.instagram.com/*",
-    "*://*.twitter.com/*",
-    "*://*.x.com/*",
-    "*://*.tiktok.com/*",
-    "*://tiktok.com/*",
-    "*://www.tiktok.com/*",
-    "*://*.reddit.com/*",
-    "*://reddit.com/*",
-    "*://www.reddit.com/*",
-    "*://*.pinterest.com/*",
-    "*://pinterest.com/*",
-    "*://www.pinterest.com/*"
-  ],
+  "permissions": ["storage", "scripting", "notifications", "downloads", "activeTab"],
+  "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "background.js"
   },
@@ -38,23 +24,12 @@
   "content_scripts": [
     {
       "matches": ["*://*.youtube.com/*"],
-      "js": ["content.js"]
+      "js": ["content.js"],
+      "run_at": "document_idle",
+      "all_frames": false
     },
     {
-      "matches": [
-        "*://*.instagram.com/*",
-        "*://*.twitter.com/*",
-        "*://*.x.com/*",
-        "*://*.tiktok.com/*",
-        "*://tiktok.com/*",
-        "*://www.tiktok.com/*",
-        "*://*.reddit.com/*",
-        "*://reddit.com/*",
-        "*://www.reddit.com/*",
-        "*://*.pinterest.com/*",
-        "*://pinterest.com/*",
-        "*://www.pinterest.com/*"
-      ],
+      "matches": ["<all_urls>"],
       "js": ["blocker.js"],
       "run_at": "document_start",
       "all_frames": true
