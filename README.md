@@ -1,45 +1,59 @@
-# 🎓 YouTube Study Enhancer
+YouTube Study Enhancer
+Transform your browser into a focused study environment — block distractions, enhance YouTube, and immerse yourself with ambient soundscapes.
 
-A lightweight Chrome extension to Block Distractions. Perfect for students, researchers, and anyone who wants to watch intentionally.
-A powerful Chrome extension that enhances your YouTube studying experience and blocks distracting social media sites to help you stay focused.
+Features
+Site Blocker
+Block distracting websites with a single click — YouTube, Instagram, X (Twitter), TikTok, Reddit, Pinterest, or any custom domain you add.
 
-## ✨ Features
+YouTube Enhancement
+Block 2x Speed — Forces normal playback speed
 
-### 🎬 YouTube Enhancements
-| Feature | Description |
-|---------|-------------|
-| **Block 2x Speed** | Prevents skipping through educational content too quickly |
-| **Hide Sidebar** | Removes suggested videos and "Up next" panel (works in fullscreen too!) |
-| **Hide Comments** | Eliminates comment section distractions |
+Hide Video Feed — Remove or hide the sidebar recommendations
 
-### 🚫 Site Blocker
-| Feature | Description |
-|---------|-------------|
-| **YouTube Shorts Blocker** | Removes Shorts from feed, search, and sidebar |
-| **Instagram** | Blocks distracting feed and stories |
-| **X (Twitter)** | Blocks timeline and notifications |
-| **TikTok** | Blocks infinite scrolling feed |
-| **Reddit** | Blocks subreddit feeds |
-| **Pinterest** | Blocks pin board scrolling |
-| **Sound Blocking** | Automatically mutes audio on blocked sites |
+Hide Comments — Eliminate comment section distractions
 
-### 🎨 Customization
-| Feature | Description |
-|---------|-------------|
-| **Dark/Light Theme** | Toggle between dark and light mode with moon/sun icons |
-| **Per-Site Toggles** | Enable/disable blocking for each site independently |
-| **Persistent Settings** | All preferences are saved automatically |
+Block Shorts — Remove YouTube Shorts from your feed
 
----
+Immersive Study Mode
+When a blocked site is detected, you're greeted with a focus overlay featuring:
 
-## 🚀 Installation
+Ambient background music — Curated dark ambient soundscapes
 
-### Manual Installation (Developer Mode)
-1. Download or clone this repository
-   ```bash
-   git clone git clone https://github.com/reapertakumi/youtube-study-enhancer.git
+Dynamic spotlight effects — Customizable colors and movement
 
-2. Open Chrome and go to chrome://extensions/
-3. Enable Developer Mode (toggle in top right corner)
-4. Click "Load unpacked"
-5. Select the youtube-study-enhancer folder
+Static noise texture — Subtle visual depth
+
+Music controls — Play, pause, skip tracks, and volume adjustment
+
+Personalization
+Light and Dark themes — Toggle between both modes
+
+Preset moods — Calm, Focus, Energy, Deep, Warm, Night
+
+Customizable spotlights — Choose colors, number of lights, and movement speed
+
+Installation
+https://img.shields.io/badge/Chrome-Web%2520Store-4285F4?logo=googlechrome
+
+Install directly from the Chrome Web Store, or load unpacked from source:
+
+Clone this repository
+
+Navigate to chrome://extensions/
+
+Enable Developer mode
+
+Click Load unpacked and select the extension folder
+
+Usage
+Click the extension icon in your toolbar to open the popup. Toggle features on or off, add custom domains to block, and adjust your study environment.
+
+The study overlay activates automatically when you visit a blocked site — complete with ambient music and dynamic visuals to help you stay focused.
+
+Development
+bash
+git clone https://github.com/reapertakumi/YouTube-Study-Enhancer.git
+Load the unpacked extension in Chrome. No build step required — pure JavaScript.
+
+License
+MIT © reapertakumi
