@@ -128,17 +128,10 @@
 
     <div class="divider"></div>
 
-    <div class="section-header">
-      <span class="section-title">Updates</span>
-    </div>
-
-    <div class="card updater-card" id="updaterCard">
-      <div class="updater-info">
-        <span id="versionDisplay">Current version: 0.1.8</span>
-        <div id="updateStatus" class="update-status">Checking for updates...</div>
-      </div>
-      <button id="checkUpdateBtn" class="update-btn" style="display: none;">Check for Updates</button>
-      <button id="installUpdateBtn" class="update-btn install-btn" style="display: none;">Install Update</button>
+    <!-- Simple version info section (centered) -->
+    <div class="version-section">
+      <div id="versionDisplay" class="version-number"></div>
+      <div id="updateStatus" class="update-status"></div>
     </div>
 
   </div>
@@ -147,7 +140,7 @@
   <div id="feedModeModal" class="feed-mode-modal" style="display: none;">
     <div class="feed-mode-modal-content">
       <div class="feed-mode-modal-header">
-        <span>Hide Video Feed Mode</span>
+        <span>Video Feed Mode Settings</span>
         <button id="closeModalBtn" class="modal-close-btn">X</button>
       </div>
       <div class="feed-mode-modal-body">
@@ -160,7 +153,7 @@
           <span class="mode-label">Hide Mode</span>
         </div>
         <div class="mode-description" id="modeDescription">
-          Remove Mode: Hides feed and expands video to full width
+          Remove Mode: Removes feed and expands video to full width
         </div>
       </div>
     </div>

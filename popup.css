@@ -5,12 +5,40 @@ body {
   color: #fff;
   font-family: system-ui, -apple-system, sans-serif;
   transition: background 0.3s ease, color 0.3s ease;
+  position: relative;
+}
+
+/* Static Noise Texture Layer */
+body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+  background-image: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MDAiIGhlaWdodD0iNDAwIj48ZmlsdGVyIGlkPSJmIj48ZmVUdXJidWxlbmNlIHR5cGU9ImZyYWN0YWxOb2lzZSIgYmFzZUZyZXF1ZW5jeT0iLjciIG51bU9jdGF2ZXM9IjMiLz48L2ZpbHRlcj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWx0ZXI9InVybCgjZikiIG9wYWNpdHk9IjAuMDYiLz48L3N2Zz4=');
+  background-repeat: repeat;
+  opacity: 0.05;
+  mix-blend-mode: overlay;
+  animation: subtleNoiseShift 8s infinite alternate;
+}
+
+@keyframes subtleNoiseShift {
+  0% { opacity: 0.04; background-position: 0 0; }
+  100% { opacity: 0.07; background-position: 10px 10px; }
 }
 
 /* Light Theme */
 body.light-theme {
   background: #f5f5f5;
   color: #1a1a1a;
+}
+
+body.light-theme::before {
+  opacity: 0.03;
+  mix-blend-mode: multiply;
 }
 
 body.light-theme .card {
@@ -154,16 +182,44 @@ body.light-theme * {
   scrollbar-color: #cccccc rgba(0, 0, 0, 0.05);
 }
 
+/* App Container - Popup Open Animation */
 .app {
   width: 270px;
   padding: 16px;
+  animation: containerFadeIn 0.4s cubic-bezier(0.2, 0.9, 0.4, 1.1);
+  position: relative;
+  z-index: 2;
 }
 
+@keyframes containerFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Header Animation */
 .header {
   display: flex;
   align-items: center;
   gap: 10px;
   margin-bottom: 8px;
+  animation: slideDown 0.35s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .logo img {
@@ -194,12 +250,12 @@ h1 {
   justify-content: center;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.1);
-  transition: all 0.2s ease;
+  transition: all 0.25s cubic-bezier(0.2, 0.9, 0.4, 1.1);
 }
 
 .theme-toggle:hover {
   background: rgba(255, 255, 255, 0.2);
-  transform: scale(1.05);
+  transform: rotate(15deg) scale(1.05);
 }
 
 body.light-theme .theme-toggle {
@@ -232,13 +288,17 @@ body.light-theme .theme-icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
+  transition: all 0.25s cubic-bezier(0.2, 0.9, 0.4, 1.1);
   color: #3ea6ff;
 }
 
 .settings-wheel-btn:hover {
   background: rgba(62, 166, 255, 0.1);
+}
+
+.settings-wheel-btn:hover svg {
   transform: rotate(30deg);
+  transition: transform 0.3s cubic-bezier(0.2, 0.9, 0.4, 1.1);
 }
 
 .settings-wheel-btn svg {
@@ -247,6 +307,7 @@ body.light-theme .theme-icon {
   stroke: currentColor;
   stroke-width: 2;
   fill: none;
+  transition: transform 0.3s cubic-bezier(0.2, 0.9, 0.4, 1.1);
 }
 
 body.light-theme .settings-wheel-btn {
@@ -270,6 +331,12 @@ body.light-theme .settings-wheel-btn:hover {
   align-items: center;
   justify-content: center;
   font-family: system-ui, -apple-system, sans-serif;
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .feed-mode-modal-content {
@@ -280,6 +347,18 @@ body.light-theme .settings-wheel-btn:hover {
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
   border: 1px solid rgba(62, 166, 255, 0.2);
   overflow: hidden;
+  animation: modalScaleIn 0.25s cubic-bezier(0.2, 0.9, 0.4, 1.1);
+}
+
+@keyframes modalScaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .feed-mode-modal-header {
@@ -354,7 +433,7 @@ body.light-theme .settings-wheel-btn:hover {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: #7e1515;
+  background-color: #3d3d3d;
   transition: 0.3s;
   border-radius: 26px;
 }
@@ -372,7 +451,7 @@ body.light-theme .settings-wheel-btn:hover {
 }
 
 .mode-switch input:checked + .mode-slider {
-  background-color: #3ea6ff;
+  background-color: #3d3d3d;
 }
 
 .mode-switch input:checked + .mode-slider:before {
@@ -414,6 +493,7 @@ body.light-theme #modeDescription {
   color: #4a90e2;
 }
 
+/* Card Styles with Animations */
 .card {
   display: flex;
   justify-content: space-between;
@@ -422,8 +502,34 @@ body.light-theme #modeDescription {
   padding: 12px 14px;
   border-radius: 12px;
   margin-bottom: 8px;
-  transition: all 0.25s ease;
+  transition: all 0.25s cubic-bezier(0.2, 0.9, 0.4, 1.1);
+  animation: cardFadeUp 0.35s cubic-bezier(0.2, 0.9, 0.4, 1.1) backwards;
 }
+
+@keyframes cardFadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Staggered animation for cards */
+.card:nth-child(1) { animation-delay: 0.02s; }
+.card:nth-child(2) { animation-delay: 0.05s; }
+.card:nth-child(3) { animation-delay: 0.08s; }
+.card:nth-child(4) { animation-delay: 0.11s; }
+.card:nth-child(5) { animation-delay: 0.14s; }
+.card:nth-child(6) { animation-delay: 0.17s; }
+.card:nth-child(7) { animation-delay: 0.20s; }
+.card:nth-child(8) { animation-delay: 0.23s; }
+.card:nth-child(9) { animation-delay: 0.26s; }
+.card:nth-child(10) { animation-delay: 0.29s; }
+.card:nth-child(11) { animation-delay: 0.32s; }
+.card:nth-child(12) { animation-delay: 0.35s; }
 
 .card:hover {
   background: #2a2a2a;
@@ -473,17 +579,46 @@ body.light-theme #modeDescription {
   stroke-width: 2;
 }
 
+/* Divider Animation */
 .divider {
   height: 1px;
   background: rgba(255, 255, 255, 0.1);
   margin: 12px 0;
+  animation: scaleWidth 0.4s ease-out backwards;
+  animation-delay: 0.1s;
+  transform-origin: left;
 }
 
+@keyframes scaleWidth {
+  from {
+    transform: scaleX(0);
+    opacity: 0;
+  }
+  to {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+}
+
+/* Section Header Animation */
 .section-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin: 2px 0 6px 0;
+  animation: fadeInRight 0.3s ease-out backwards;
+  animation-delay: 0.01s;
+}
+
+@keyframes fadeInRight {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 .section-title {
@@ -497,6 +632,7 @@ body.light-theme #modeDescription {
   margin-top: 8px;
 }
 
+/* Add Domain Button Animation */
 .add-domain-full-btn {
   width: 100%;
   background: rgba(62, 166, 255, 0.1);
@@ -511,12 +647,25 @@ body.light-theme #modeDescription {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  transition: all 0.2s ease;
+  transition: all 0.2s cubic-bezier(0.2, 0.9, 0.4, 1.1);
+  animation: fadeInUp 0.35s ease-out backwards;
+  animation-delay: 0.15s;
 }
 
 .add-domain-full-btn:hover {
   background: rgba(62, 166, 255, 0.2);
-  transform: translateY(-1px);
+  transform: translateY(-2px);
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .add-domain-full-btn svg {
@@ -542,7 +691,7 @@ body.light-theme #modeDescription {
   inset: 0;
   background: #7e1515;
   border-radius: 20px;
-  transition: 0.3s;
+  transition: 0.25s cubic-bezier(0.2, 0.9, 0.4, 1.1);
 }
 
 .slider::before {
@@ -554,7 +703,7 @@ body.light-theme #modeDescription {
   top: 2px;
   background: white;
   border-radius: 50%;
-  transition: 0.3s;
+  transition: 0.25s cubic-bezier(0.2, 0.9, 0.4, 1.1);
 }
 
 input:checked + .slider {
@@ -661,80 +810,129 @@ input:checked + .slider::before {
   transform: translateY(-1px);
 }
 
-/* Updater Styles */
+/* ============================================ */
+/* CLICKABLE CARDS FEATURE                      */
+/* ============================================ */
+
+/* Make all cards clickable (except updater card) */
+.card {
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.2, 0.9, 0.4, 1.1);
+}
+
+.card:active {
+  transform: scale(0.98);
+}
+
+/* Make switch interactive but not block card click */
+.card .switch {
+  pointer-events: auto;
+  position: relative;
+  z-index: 2;
+}
+
+/* Custom domain card clickable */
+.custom-domain-card {
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.2, 0.9, 0.4, 1.1);
+}
+
+.custom-domain-card:active {
+  transform: scale(0.98);
+}
+
+/* Delete button remains independently clickable */
+.custom-domain-card .delete-domain-btn {
+  pointer-events: auto;
+  position: relative;
+  z-index: 3;
+}
+
+/* Switch in custom domain card remains clickable */
+.custom-domain-card .switch {
+  pointer-events: auto;
+  position: relative;
+  z-index: 2;
+}
+
+/* Light theme custom domain card hover */
+body.light-theme .custom-domain-card:hover {
+  background: #e0e0e8;
+}
+
+/* Updater card should NOT be clickable */
 .updater-card {
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 14px;
+  cursor: default;
 }
 
-.updater-info {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+.updater-card:active {
+  transform: scale(1);
 }
 
-#versionDisplay {
+.updater-card:hover {
+  background: #1f1f1f;
+}
+
+body.light-theme .updater-card:hover {
+  background: #ffffff;
+}
+
+/* Card hover states for clickable cards */
+.card:hover {
+  background: #2a2a2a;
+}
+
+body.light-theme .card:hover {
+  background: #e8e8e8;
+}
+
+/* ============================================ */
+/* VERSION SECTION (NEW)                        */
+/* ============================================ */
+
+.version-section {
+  text-align: center;
+  margin-top: 12px;
+  padding: 12px 0 8px 0;
+  animation: fadeInUp 0.35s ease-out backwards;
+  animation-delay: 0.2s;
+}
+
+.version-number {
   font-size: 12px;
-  opacity: 0.8;
   font-weight: 500;
+  opacity: 0.7;
+  letter-spacing: 0.3px;
 }
 
 .update-status {
   font-size: 11px;
-  opacity: 0.7;
-  font-family: monospace;
+  margin-top: 4px;
+  opacity: 0.8;
 }
 
 .update-status.checking {
   color: #3ea6ff;
-  opacity: 1;
 }
 
 .update-status.available {
   color: #4caf50;
-  opacity: 1;
   font-weight: 500;
+  cursor: pointer;
 }
 
 .update-status.error {
   color: #f44336;
-  opacity: 1;
 }
 
 .update-status.up-to-date {
   color: #4caf50;
-  opacity: 0.9;
 }
 
-.update-btn {
-  width: 100%;
-  padding: 8px 12px;
-  border: none;
-  border-radius: 8px;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  background: #3ea6ff;
-  color: white;
+body.light-theme .update-status.available {
+  color: #2e7d32;
 }
 
-.update-btn:hover {
-  background: #2a8fdf;
-  transform: translateY(-1px);
-}
-
-.update-btn.install-btn {
-  background: #4caf50;
-}
-
-.update-btn.install-btn:hover {
-  background: #45a049;
-}
-
-.update-btn:active {
-  transform: translateY(0);
+body.light-theme .update-status.up-to-date {
+  color: #2e7d32;
 }

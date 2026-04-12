@@ -8,14 +8,25 @@ const runtime = (typeof chrome !== 'undefined' && chrome.runtime) ? chrome.runti
 const CURRENT_VERSION = runtime.getManifest().version;
 const GITHUB_REPO = "reapertakumi/YouTube-Study-Enhancer";
 const GITHUB_API_URL = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
+const WEBSTORE_URL = "https://chromewebstore.google.com/detail/pamglonmkhcpoilnohgaoghgfnjjmjne?utm_source=item-share-cb";
 
 let latestVersionInfo = null;
 let modalOverlay = null;
 let domainModalOverlay = null;
 
 document.addEventListener("DOMContentLoaded", () => {
+  console.log("Popup loaded - initializing...");
+  
+  // Display version
+  const versionDisplay = document.getElementById('versionDisplay');
+  if (versionDisplay) {
+    versionDisplay.textContent = `Version ${CURRENT_VERSION}`;
+  }
+  
+  // Load all settings
   storage.sync.get([...allIds, "hideFeedMode", "theme"], (data) => {
     console.log("Loaded settings:", data);
+    
     allIds.forEach(id => {
       const element = document.getElementById(id);
       if (element) {
@@ -32,15 +43,17 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     if (modeDescription) {
       if (currentMode === 'remove') {
-        modeDescription.textContent = 'Remove Mode: Hides feed and expands video to full width';
+        modeDescription.textContent = 'Remove Mode: Removes feed and expands video to full width';
       } else {
         modeDescription.textContent = 'Hide Mode: Hides feed but keeps original video size';
       }
     }
   });
 
+  // Load custom domains
   loadCustomDomains();
 
+  // Add change listeners to all toggles
   allIds.forEach(id => {
     const element = document.getElementById(id);
     if (element) {
@@ -55,6 +68,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  // Theme toggle
   const themeToggle = document.getElementById('themeToggle');
   const moonIcon = document.querySelector('.moon-icon');
   const sunIcon = document.querySelector('.sun-icon');
@@ -89,6 +103,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  // Add custom domain button
   const addDomainBtn = document.getElementById('addDomainBtn');
   if (addDomainBtn) {
     addDomainBtn.addEventListener('click', () => {
@@ -96,6 +111,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  // Feed mode modal
   const settingsWheelBtn = document.getElementById('settingsWheelBtn');
   const feedModeModal = document.getElementById('feedModeModal');
   const closeModalBtn = document.getElementById('closeModalBtn');
@@ -125,10 +141,13 @@ document.addEventListener("DOMContentLoaded", () => {
   if (feedModeToggle) {
     feedModeToggle.addEventListener('change', (e) => {
       const mode = e.target.checked ? 'hide' : 'remove';
-      setHideFeedMode(mode);
+      storage.sync.set({ hideFeedMode: mode }, () => {
+        console.log(`Hide feed mode set to: ${mode}`);
+        notifyAllTabs();
+      });
       if (modeDescription) {
         if (mode === 'remove') {
-          modeDescription.textContent = 'Remove Mode: Hides feed and expands video to full width';
+          modeDescription.textContent = 'Remove Mode: Removes feed and expands video to full width';
         } else {
           modeDescription.textContent = 'Hide Mode: Hides feed but keeps original video size';
         }
@@ -136,36 +155,13 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  const versionDisplay = document.getElementById('versionDisplay');
-  const updateStatus = document.getElementById('updateStatus');
-  const checkUpdateBtn = document.getElementById('checkUpdateBtn');
-  const installUpdateBtn = document.getElementById('installUpdateBtn');
-  
-  if (versionDisplay) {
-    versionDisplay.textContent = `Current version: ${CURRENT_VERSION}`;
-  }
-  
+  // Check for updates on load and periodically
   checkForUpdates();
-  
-  if (checkUpdateBtn) {
-    checkUpdateBtn.addEventListener('click', () => {
-      checkForUpdates();
-    });
-  }
-  
-  if (installUpdateBtn) {
-    installUpdateBtn.addEventListener('click', () => {
-      showDownloadOptions();
-    });
-  }
-});
+  setInterval(checkForUpdates, 60 * 60 * 1000); // check every hour
 
-function setHideFeedMode(mode) {
-  storage.sync.set({ hideFeedMode: mode }, () => {
-    console.log(`Hide feed mode set to: ${mode}`);
-    notifyAllTabs();
-  });
-}
+  // Initialize clickable cards
+  initClickableCards();
+});
 
 function notifyAllTabs() {
   storage.sync.get([...blockIds, 'customDomains', 'hideFeedMode'], (data) => {
@@ -202,6 +198,10 @@ function loadCustomDomains() {
       const domainCard = createDomainCard(domain, enabled);
       container.appendChild(domainCard);
     });
+    
+    setTimeout(() => {
+      makeCustomDomainsClickable();
+    }, 50);
   });
 }
 
@@ -274,19 +274,11 @@ function removeCustomDomain(domain) {
 }
 
 function addCustomDomain(domain) {
-  // Improved domain validation - allows domains with or without www, with or without protocol
   let cleanDomain = domain.trim().toLowerCase();
-  
-  // Remove protocol if user accidentally adds it
   cleanDomain = cleanDomain.replace(/^(https?:\/\/)/i, '');
-  
-  // Remove trailing slashes
   cleanDomain = cleanDomain.replace(/\/$/, '');
-  
-  // Remove www. for storage (we'll store clean version)
   cleanDomain = cleanDomain.replace(/^www\./, '');
   
-  // Validate domain format
   const domainRegex = /^[a-zA-Z0-9][a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
   if (!domainRegex.test(cleanDomain)) {
     alert('Please enter a valid domain (e.g., google.com, facebook.com, github.io)');
@@ -385,15 +377,10 @@ function closeDomainModal() {
 
 async function checkForUpdates() {
   const updateStatus = document.getElementById('updateStatus');
-  const checkUpdateBtn = document.getElementById('checkUpdateBtn');
-  const installUpdateBtn = document.getElementById('installUpdateBtn');
-  
   if (!updateStatus) return;
   
   updateStatus.textContent = 'Checking for updates...';
   updateStatus.className = 'update-status checking';
-  if (checkUpdateBtn) checkUpdateBtn.style.display = 'none';
-  if (installUpdateBtn) installUpdateBtn.style.display = 'none';
   
   try {
     const response = await fetch(GITHUB_API_URL, {
@@ -410,24 +397,24 @@ async function checkForUpdates() {
     const latestVersion = release.tag_name.replace(/^v/, '');
     
     if (compareVersions(latestVersion, CURRENT_VERSION) > 0) {
-      updateStatus.textContent = `New version ${latestVersion} available!`;
+      updateStatus.textContent = `New version ${latestVersion} available! Click to update`;
       updateStatus.className = 'update-status available';
       latestVersionInfo = release;
-      if (installUpdateBtn) {
-        installUpdateBtn.textContent = 'Download Update';
-        installUpdateBtn.style.display = 'block';
-      }
+      updateStatus.style.cursor = 'pointer';
+      updateStatus.onclick = () => {
+        window.open(WEBSTORE_URL, '_blank');
+      };
     } else {
       updateStatus.textContent = 'Up to date';
       updateStatus.className = 'update-status up-to-date';
-      if (checkUpdateBtn) checkUpdateBtn.style.display = 'block';
+      updateStatus.onclick = null;
+      updateStatus.style.cursor = 'default';
     }
     
   } catch (error) {
     console.error('Update check failed:', error);
     updateStatus.textContent = 'Failed to check for updates';
     updateStatus.className = 'update-status error';
-    if (checkUpdateBtn) checkUpdateBtn.style.display = 'block';
   }
 }
 
@@ -445,111 +432,121 @@ function compareVersions(v1, v2) {
   return 0;
 }
 
-function showDownloadOptions() {
-  if (!latestVersionInfo) {
-    console.error('No update available');
-    return;
-  }
+// ==================== CLICKABLE CARDS FEATURE ====================
+
+function initClickableCards() {
+  const clickableCards = document.querySelectorAll('.card:not(.updater-card)');
   
-  const assets = latestVersionInfo.assets;
-  let zipUrl = null;
-  let crxUrl = null;
-  
-  for (const asset of assets) {
-    if (asset.name.endsWith('.zip')) {
-      zipUrl = asset.browser_download_url;
+  clickableCards.forEach(card => {
+    const checkbox = card.querySelector('input[type="checkbox"]');
+    if (!checkbox) return;
+    
+    if (card._clickHandler) {
+      card.removeEventListener('click', card._clickHandler);
     }
-    if (asset.name.endsWith('.crx')) {
-      crxUrl = asset.browser_download_url;
-    }
-  }
-  
-  if (modalOverlay) {
-    modalOverlay.remove();
-  }
-  
-  modalOverlay = document.createElement('div');
-  modalOverlay.id = 'download-modal';
-  modalOverlay.style.cssText = `
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.85);
-    z-index: 10000000;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-family: system-ui, -apple-system, sans-serif;
-  `;
-  
-  const modalContent = document.createElement('div');
-  const isLightTheme = document.body.classList.contains('light-theme');
-  
-  modalContent.style.cssText = `
-    background: ${isLightTheme ? '#ffffff' : '#1f1f1f'};
-    border-radius: 24px;
-    padding: 28px 24px;
-    max-width: 320px;
-    width: 85%;
-    text-align: center;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-    border: 1px solid ${isLightTheme ? 'rgba(0, 0, 0, 0.1)' : 'rgba(255, 255, 255, 0.1)'};
-  `;
-  
-  const version = latestVersionInfo.tag_name.replace(/^v/, '');
-  
-  modalContent.innerHTML = `
-    <div style="margin-bottom: 16px; display: flex; justify-content: center;">
-      <img src="icons/icon128.png" alt="Logo" style="width: 56px; height: 56px; border-radius: 14px;">
-    </div>
-    <h3 style="margin: 0 0 4px 0; font-size: 1.2rem; font-weight: 600;">Update Available</h3>
-    <p style="margin: 0 0 16px 0; font-size: 0.8rem; opacity: 0.6;">
-      ${CURRENT_VERSION} → ${version}
-    </p>
-    <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px;">
-      ${zipUrl ? `<button id="modal-zip-btn" style="padding: 12px 16px; background: ${isLightTheme ? '#f0f0f0' : '#2a2a2a'}; border: 1px solid ${isLightTheme ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)'}; border-radius: 12px; color: ${isLightTheme ? '#1a1a1a' : 'white'}; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; gap: 12px; width: 100%;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span>ZIP File (Load Unpacked)</span></button>` : ''}
-      ${crxUrl ? `<button id="modal-crx-btn" style="padding: 12px 16px; background: #3ea6ff; border: none; border-radius: 12px; color: white; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; gap: 12px; width: 100%;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg><span>CRX File (Drag and Drop)</span></button>` : ''}
-    </div>
-    <button id="modal-close-btn" style="padding: 8px 20px; background: transparent; border: 1px solid ${isLightTheme ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.2)'}; border-radius: 8px; color: inherit; font-size: 12px; cursor: pointer;">Cancel</button>
-  `;
-  
-  modalOverlay.appendChild(modalContent);
-  document.body.appendChild(modalOverlay);
-  
-  const zipBtn = document.getElementById('modal-zip-btn');
-  const crxBtn = document.getElementById('modal-crx-btn');
-  const closeBtn = document.getElementById('modal-close-btn');
-  
-  if (zipBtn && zipUrl) {
-    zipBtn.addEventListener('click', () => {
-      window.open(zipUrl, '_blank');
-      closeDownloadModal();
-    });
-  }
-  
-  if (crxBtn && crxUrl) {
-    crxBtn.addEventListener('click', () => {
-      window.open(crxUrl, '_blank');
-      closeDownloadModal();
-    });
-  }
-  
-  if (closeBtn) {
-    closeBtn.addEventListener('click', closeDownloadModal);
-  }
-  
-  modalOverlay.addEventListener('click', (e) => {
-    if (e.target === modalOverlay) {
-      closeDownloadModal();
-    }
+    
+    const clickHandler = (event) => {
+      let target = event.target;
+      let isSwitchElement = false;
+      
+      while (target && target !== card) {
+        if (target.classList && target.classList.contains('switch')) {
+          isSwitchElement = true;
+          break;
+        }
+        if (target.tagName === 'LABEL' && target.classList.contains('switch')) {
+          isSwitchElement = true;
+          break;
+        }
+        if (target.tagName === 'INPUT' && target.type === 'checkbox') {
+          isSwitchElement = true;
+          break;
+        }
+        if (target.classList && target.classList.contains('slider')) {
+          isSwitchElement = true;
+          break;
+        }
+        target = target.parentNode;
+      }
+      
+      if (isSwitchElement) {
+        return;
+      }
+      
+      event.preventDefault();
+      checkbox.checked = !checkbox.checked;
+      const changeEvent = new Event('change', { bubbles: true });
+      checkbox.dispatchEvent(changeEvent);
+    };
+    
+    card._clickHandler = clickHandler;
+    card.addEventListener('click', clickHandler);
+    card.style.cursor = 'pointer';
   });
+  
+  makeCustomDomainsClickable();
 }
 
-function closeDownloadModal() {
-  if (modalOverlay) {
-    modalOverlay.remove();
-    modalOverlay = null;
-  }
+function makeCustomDomainsClickable() {
+  const customCards = document.querySelectorAll('.custom-domain-card');
+  
+  customCards.forEach(card => {
+    const checkbox = card.querySelector('input[type="checkbox"]');
+    if (!checkbox) return;
+    
+    if (card._customClickHandler) {
+      card.removeEventListener('click', card._customClickHandler);
+    }
+    
+    const clickHandler = (event) => {
+      let target = event.target;
+      let isDeleteClick = false;
+      while (target && target !== card) {
+        if (target.classList && target.classList.contains('delete-domain-btn')) {
+          isDeleteClick = true;
+          break;
+        }
+        if (target.tagName === 'BUTTON' && target.classList.contains('delete-domain-btn')) {
+          isDeleteClick = true;
+          break;
+        }
+        target = target.parentNode;
+      }
+      
+      if (isDeleteClick) {
+        return;
+      }
+      
+      target = event.target;
+      let isSwitchClick = false;
+      while (target && target !== card) {
+        if (target.classList && target.classList.contains('switch')) {
+          isSwitchClick = true;
+          break;
+        }
+        if (target.tagName === 'INPUT' && target.type === 'checkbox') {
+          isSwitchClick = true;
+          break;
+        }
+        if (target.classList && target.classList.contains('slider')) {
+          isSwitchClick = true;
+          break;
+        }
+        target = target.parentNode;
+      }
+      
+      if (isSwitchClick) {
+        return;
+      }
+      
+      event.preventDefault();
+      checkbox.checked = !checkbox.checked;
+      const changeEvent = new Event('change', { bubbles: true });
+      checkbox.dispatchEvent(changeEvent);
+    };
+    
+    card._customClickHandler = clickHandler;
+    card.addEventListener('click', clickHandler);
+    card.style.cursor = 'pointer';
+  });
 }

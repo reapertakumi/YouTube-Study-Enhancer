@@ -40,7 +40,6 @@ function showUpdateNotification(oldVersion, newVersion) {
 }
 
 async function injectBlocker(tabId, url) {
-  // Skip chrome://, edge://, about: pages
   if (!url || url.startsWith('chrome://') || url.startsWith('edge://') || url.startsWith('about:') || url.startsWith('chrome-extension://')) {
     return;
   }
