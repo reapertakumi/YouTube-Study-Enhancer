@@ -318,6 +318,32 @@ body.light-theme .settings-wheel-btn:hover {
   background: rgba(74, 144, 226, 0.1);
 }
 
+/* Made by link styling */
+.made-by {
+  margin-top: 6px;
+  text-align: center;
+}
+
+.github-link {
+  color: #888;
+  font-size: 10px;
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.github-link:hover {
+  color: #ffffff;
+  text-decoration: underline;
+}
+
+body.light-theme .github-link {
+  color: #999;
+}
+
+body.light-theme .github-link:hover {
+  color: #000000;
+}
+
 /* Feed Mode Modal */
 .feed-mode-modal {
   position: fixed;

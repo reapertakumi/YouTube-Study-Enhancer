@@ -23,21 +23,11 @@ chrome.runtime.onInstalled.addListener((details) => {
     });
   } else if (details.reason === 'update') {
     console.log(`Extension updated from ${details.previousVersion} to ${CURRENT_VERSION}`);
-    showUpdateNotification(details.previousVersion, CURRENT_VERSION);
+    // No notification - just log
   }
 });
 
-function showUpdateNotification(oldVersion, newVersion) {
-  if (chrome.notifications) {
-    chrome.notifications.create({
-      type: 'basic',
-      iconUrl: 'icons/icon128.png',
-      title: 'YouTube Study Enhancer Updated',
-      message: `Updated from ${oldVersion} to ${newVersion}. Check the popup for new features!`,
-      priority: 1
-    });
-  }
-}
+// showUpdateNotification function removed
 
 async function injectBlocker(tabId, url) {
   if (!url || url.startsWith('chrome://') || url.startsWith('edge://') || url.startsWith('about:') || url.startsWith('chrome-extension://')) {

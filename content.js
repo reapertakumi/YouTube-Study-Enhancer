@@ -8,12 +8,13 @@ let settings = {
 
 let speedInterval = null;
 let speedObservers = [];
-let originalPlaybackRates = new WeakMap(); // store original rates per video
-let rateChangeHandlers = new WeakMap();    // store bound handlers for removal
+let originalPlaybackRates = new WeakMap();
+let rateChangeHandlers = new WeakMap();
 
 let isInitialized = false;
 let feedOriginalDisplay = null;
 let resizeTimeout = null;
+let shortsStyleElement = null;
 
 const storage = (typeof chrome !== 'undefined' && chrome.storage) ? chrome.storage : browser.storage;
 
@@ -29,7 +30,8 @@ storage.sync.get(["shorts", "speed", "sidebar", "comments", "hideFeedMode"], dat
   }
 });
 
-// Listen for setting changes
+// Listen for setting changes - optimized
+let updateTimeout = null;
 storage.onChanged.addListener(changes => {
   let needsUpdate = false;
   Object.keys(changes).forEach(key => {
@@ -39,8 +41,11 @@ storage.onChanged.addListener(changes => {
     }
   });
   if (needsUpdate) {
-    console.log("Settings updated, reapplying:", settings);
-    applyAllFeatures();
+    if (updateTimeout) clearTimeout(updateTimeout);
+    updateTimeout = setTimeout(() => {
+      console.log("Settings updated, reapplying:", settings);
+      applyAllFeatures();
+    }, 50);
   }
 });
 
@@ -53,7 +58,6 @@ if (typeof chrome !== 'undefined' && chrome.runtime) {
           settings[key] = message.settings[key];
         }
       });
-      console.log("Received settings from popup:", settings);
       applyAllFeatures();
     }
     sendResponse({ success: true });
@@ -73,37 +77,53 @@ function applyAllFeatures() {
   handleSpeed();
 }
 
-// ============ HIDE SHORTS ============
+// ============ HIDE SHORTS (CSS-based - instant, zero performance impact) ============
 function hideShorts() {
   if (!settings.shorts) {
-    document.querySelectorAll("[data-study-blocked='shorts']").forEach(el => {
-      el.removeAttribute("data-study-blocked");
-      el.style.display = "";
-    });
+    if (shortsStyleElement) {
+      shortsStyleElement.remove();
+      shortsStyleElement = null;
+    }
     return;
   }
   
-  document.querySelectorAll("a[href*='/shorts/']").forEach(link => {
-    let container = link.closest("ytd-rich-item-renderer, ytd-video-renderer, ytd-grid-video-renderer, ytd-compact-video-renderer");
-    if (container && container.style.display !== "none") {
-      container.setAttribute("data-study-blocked", "shorts");
-      container.style.display = "none";
+  if (shortsStyleElement) return;
+  
+  shortsStyleElement = document.createElement('style');
+  shortsStyleElement.id = 'study-enhancer-hide-shorts';
+  shortsStyleElement.textContent = `
+    /* Hide ALL Shorts links and containers instantly */
+    [href*="/shorts/"],
+    [href*="/shorts"] {
+      display: none !important;
     }
-  });
-
-  document.querySelectorAll("ytd-reel-shelf-renderer, ytd-rich-section-renderer").forEach(el => {
-    if (el.style.display !== "none") {
-      el.setAttribute("data-study-blocked", "shorts");
-      el.style.display = "none";
+    
+    /* Hide Shorts shelf containers */
+    grid-shelf-view-model.ytGridShelfViewModelHost,
+    ytd-reel-shelf-renderer,
+    ytd-rich-section-renderer,
+    ytd-rich-shelf-renderer {
+      display: none !important;
     }
-  });
-
-  document.querySelectorAll("ytd-guide-entry-renderer").forEach(el => {
-    if (el.innerText.includes("Shorts") && el.style.display !== "none") {
-      el.setAttribute("data-study-blocked", "shorts");
-      el.style.display = "none";
+    
+    /* Hide Shorts video containers */
+    ytd-rich-item-renderer:has([href*="/shorts/"]),
+    ytd-video-renderer:has([href*="/shorts/"]),
+    ytd-grid-video-renderer:has([href*="/shorts/"]),
+    ytd-compact-video-renderer:has([href*="/shorts/"]),
+    ytm-shorts-lockup-view-model-v2,
+    ytm-shorts-lockup-view-model {
+      display: none !important;
     }
-  });
+    
+    /* Hide Shorts in side panels */
+    ytd-guide-entry-renderer:has([href="/shorts"]),
+    ytd-mini-guide-entry-renderer:has([href="/shorts"]) {
+      display: none !important;
+    }
+  `;
+  
+  document.head.appendChild(shortsStyleElement);
 }
 
 // ============ VIDEO FEED HANDLING ============
@@ -234,7 +254,6 @@ function handleVideoFeed() {
     applyHideMode();
   }
   
-  // Hide the fullscreen grid/stills container
   const fullscreenGrid = document.querySelector('.ytp-fullscreen-grid-stills-container');
   if (fullscreenGrid) {
     fullscreenGrid.style.display = 'none';
@@ -299,7 +318,6 @@ function restoreVideoFeed() {
     primary.style.marginTop = '';
   }
   
-  // Restore the fullscreen grid container
   const fullscreenGrid = document.querySelector('.ytp-fullscreen-grid-stills-container');
   if (fullscreenGrid) {
     fullscreenGrid.style.display = '';
@@ -317,17 +335,14 @@ function handleComments() {
 
 // ============ FIXED SPEED BLOCK WITH RESTORE ============
 function handleSpeed() {
-  // Clear previous interval and observers
   if (speedInterval) {
     clearInterval(speedInterval);
     speedInterval = null;
   }
   
-  // Disconnect all observers
   speedObservers.forEach(obs => obs.disconnect());
   speedObservers = [];
   
-  // Remove ratechange event listeners from all videos and restore original rates if any
   const allVideos = document.querySelectorAll("video");
   allVideos.forEach(video => {
     const handler = rateChangeHandlers.get(video);
@@ -335,7 +350,6 @@ function handleSpeed() {
       video.removeEventListener('ratechange', handler);
       rateChangeHandlers.delete(video);
     }
-    // Restore original playback rate if we had stored it
     if (originalPlaybackRates.has(video)) {
       const originalRate = originalPlaybackRates.get(video);
       video.playbackRate = originalRate;
@@ -343,26 +357,20 @@ function handleSpeed() {
     }
   });
   
-  // If speed blocking is disabled, we're done
   if (!settings.speed) return;
   
-  // Helper to enforce speed = 1 and store original rate if not already stored
   const enforceSpeed = (video) => {
     if (!video) return;
-    // Store original rate only once
     if (!originalPlaybackRates.has(video)) {
       originalPlaybackRates.set(video, video.playbackRate);
     }
     if (video.playbackRate !== 1) {
       video.playbackRate = 1;
-      console.log("Speed reset to 1");
     }
   };
   
-  // Apply to all existing videos
   allVideos.forEach(video => {
     enforceSpeed(video);
-    // Attach ratechange listener if not already attached
     if (!rateChangeHandlers.has(video)) {
       const handler = () => enforceSpeed(video);
       video.addEventListener('ratechange', handler);
@@ -370,13 +378,11 @@ function handleSpeed() {
     }
   });
   
-  // Periodic check (every 200ms) for any missed changes
   speedInterval = setInterval(() => {
     const currentVideos = document.querySelectorAll("video");
     currentVideos.forEach(video => enforceSpeed(video));
   }, 200);
   
-  // Observe for dynamically added video elements
   const observer = new MutationObserver(() => {
     const newVideos = document.querySelectorAll("video");
     newVideos.forEach(video => {
@@ -394,33 +400,41 @@ function handleSpeed() {
   speedObservers.push(observer);
 }
 
-// ============ WATCH FOR NAVIGATION ============
+// ============ WATCH FOR NAVIGATION (optimized - minimal impact) ============
 function startObservers() {
   let lastUrl = location.href;
+  let urlChangeTimer = null;
+  
+  // Only check URL changes, not every DOM mutation
   new MutationObserver(() => {
     const url = location.href;
     if (url !== lastUrl && url.includes('youtube.com')) {
       lastUrl = url;
-      console.log("URL changed to:", url);
-      setTimeout(() => {
+      if (urlChangeTimer) clearTimeout(urlChangeTimer);
+      urlChangeTimer = setTimeout(() => {
         feedOriginalDisplay = null;
         applyAllFeatures();
-      }, 500);
+      }, 200);
     }
   }).observe(document, { subtree: true, childList: true });
   
   document.addEventListener('yt-navigate-finish', () => {
-    console.log("YouTube navigation finished");
-    setTimeout(() => {
+    if (urlChangeTimer) clearTimeout(urlChangeTimer);
+    urlChangeTimer = setTimeout(() => {
       feedOriginalDisplay = null;
       applyAllFeatures();
-    }, 300);
+    }, 200);
   });
   
+  // Only observe for feed/comments when needed - not constantly
+  let mutationTimer = null;
   const observer = new MutationObserver(() => {
-    if (document.querySelector("#secondary") || document.querySelector("#comments") || document.querySelector("video")) {
-      applyAllFeatures();
-    }
+    if (mutationTimer) clearTimeout(mutationTimer);
+    mutationTimer = setTimeout(() => {
+      if (document.querySelector("#secondary") || document.querySelector("#comments") || document.querySelector("video")) {
+        applyAllFeatures();
+      }
+    }, 150);
   });
   observer.observe(document.body, { childList: true, subtree: true });
 }

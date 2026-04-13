@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
   "name": "YouTube Study Enhancer",
-  "version": "0.2.5",
+  "version": "0.2.7",
   "description": "Enhance your YouTube studying experience and block distracting sites",
-  "permissions": ["storage", "scripting", "notifications", "activeTab"],
+  "permissions": ["storage", "scripting", "activeTab"],
   "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "background.js"

@@ -6,21 +6,22 @@ const storage = (typeof chrome !== 'undefined' && chrome.storage) ? chrome.stora
 const runtime = (typeof chrome !== 'undefined' && chrome.runtime) ? chrome.runtime : browser.runtime;
 
 const CURRENT_VERSION = runtime.getManifest().version;
-const GITHUB_REPO = "reapertakumi/YouTube-Study-Enhancer";
-const GITHUB_API_URL = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
-const WEBSTORE_URL = "https://chromewebstore.google.com/detail/pamglonmkhcpoilnohgaoghgfnjjmjne?utm_source=item-share-cb";
 
-let latestVersionInfo = null;
-let modalOverlay = null;
 let domainModalOverlay = null;
 
 document.addEventListener("DOMContentLoaded", () => {
   console.log("Popup loaded - initializing...");
   
-  // Display version
+  // Display version only (no update checking)
   const versionDisplay = document.getElementById('versionDisplay');
   if (versionDisplay) {
     versionDisplay.textContent = `Version ${CURRENT_VERSION}`;
+  }
+  
+  // Hide the update status element
+  const updateStatus = document.getElementById('updateStatus');
+  if (updateStatus) {
+    updateStatus.style.display = 'none';
   }
   
   // Load all settings
@@ -154,10 +155,6 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
   }
-
-  // Check for updates on load and periodically
-  checkForUpdates();
-  setInterval(checkForUpdates, 60 * 60 * 1000); // check every hour
 
   // Initialize clickable cards
   initClickableCards();
@@ -373,63 +370,6 @@ function closeDomainModal() {
     domainModalOverlay.remove();
     domainModalOverlay = null;
   }
-}
-
-async function checkForUpdates() {
-  const updateStatus = document.getElementById('updateStatus');
-  if (!updateStatus) return;
-  
-  updateStatus.textContent = 'Checking for updates...';
-  updateStatus.className = 'update-status checking';
-  
-  try {
-    const response = await fetch(GITHUB_API_URL, {
-      headers: {
-        'Accept': 'application/vnd.github.v3+json'
-      }
-    });
-    
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-    
-    const release = await response.json();
-    const latestVersion = release.tag_name.replace(/^v/, '');
-    
-    if (compareVersions(latestVersion, CURRENT_VERSION) > 0) {
-      updateStatus.textContent = `New version ${latestVersion} available! Click to update`;
-      updateStatus.className = 'update-status available';
-      latestVersionInfo = release;
-      updateStatus.style.cursor = 'pointer';
-      updateStatus.onclick = () => {
-        window.open(WEBSTORE_URL, '_blank');
-      };
-    } else {
-      updateStatus.textContent = 'Up to date';
-      updateStatus.className = 'update-status up-to-date';
-      updateStatus.onclick = null;
-      updateStatus.style.cursor = 'default';
-    }
-    
-  } catch (error) {
-    console.error('Update check failed:', error);
-    updateStatus.textContent = 'Failed to check for updates';
-    updateStatus.className = 'update-status error';
-  }
-}
-
-function compareVersions(v1, v2) {
-  const parts1 = v1.split('.').map(Number);
-  const parts2 = v2.split('.').map(Number);
-  
-  for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
-    const num1 = i < parts1.length ? parts1[i] : 0;
-    const num2 = i < parts2.length ? parts2[i] : 0;
-    
-    if (num1 > num2) return 1;
-    if (num1 < num2) return -1;
-  }
-  return 0;
 }
 
 // ==================== CLICKABLE CARDS FEATURE ====================
