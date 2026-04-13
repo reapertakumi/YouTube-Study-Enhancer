@@ -30,7 +30,7 @@ When a blocked site is detected, you're greeted with a focus overlay featuring:
 
 ## Installation
 
-[![Chrome Web Store](https://img.shields.io/badge/Chrome-Web%20Store-4285F4?logo=googlechrome)](https://chromewebstore.google.com/detail/pamglonmkhcpoilnohgaoghgfnjjmjne)
+[![Chrome Web Store](https://img.shields.io/badge/Chrome-Web%20Store-4285F4?logo=googlechrome)](https://chromewebstore.google.com/detail/youtube-study-enhancer/pamglonmkhcpoilnohgaoghgfnjjmjne?authuser=0)
 
 Install directly from the Chrome Web Store, or load unpacked from source:
 
