@@ -19,7 +19,6 @@ Block distracting websites with a single click — YouTube, Instagram, X (Twitte
 When a blocked site is detected, you're greeted with a focus overlay featuring:
 - **Ambient background music** — Curated dark ambient soundscapes
 - **Dynamic spotlight effects** — Customizable colors and movement
-- **Static noise texture** — Subtle visual depth
 - **Music controls** — Play, pause, skip tracks, and volume adjustment
 
 ### Personalization
