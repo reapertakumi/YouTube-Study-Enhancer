@@ -46,14 +46,69 @@
   // List of music files in the music folder with metadata
   const MUSIC_FILES = [
     { 
-      file: "lemonmusiclab-dark-ambient-soundscape-505384.mp3",
-      title: "Dark Ambient Soundscape",
-      artist: "Lemon Music Lab"
+      file: "fassounds-good-night-lofi-cozy-chill-music-160166.mp3",
+      title: "Title Unavailable",
+      artist: "???"
     },
     { 
-      file: "freemusicforvideo-dark-ambient-soundscape-dreamscape-462864.mp3",
-      title: "Dreamscape",
-      artist: "Free Music for Video"
+      file: "fassounds-lofi-study-calm-peaceful-chill-hop-112191.mp3",
+      title: "Title Unavailable",
+      artist: "???"
+    },
+    {
+      file: "lofi_music_library-coffee-lofi-chill-lofi-ambient-458901.mp3",
+      title: "Title Unavailable",
+      artist: "???"
+    },
+     {
+      file: "lofi_music_library-lofi-girl-chill-lofi-beats-lofi-ambient-461871.mp3",
+      title: "Title Unavailable",
+      artist: "???"
+    },
+     {
+      file: "lofi_music_library-lofi-rain-lofi-music-458077.mp3",
+      title: "Title Unavailable",
+      artist: "???"
+    },
+     {
+      file: "lofidreams-cozy-lofi-background-music-457199.mp3",
+      title: "Title Unavailable",
+      artist: "???"
+    },
+     {
+      file: "lofidreams-lofi-jazz-music-485312.mp3",
+      title: "Title Unavailable",
+      artist: "???"
+    },
+     {
+      file: "mondamusic-lofi-chill-chill-512854.mp3",
+      title: "Title Unavailable",
+      artist: "???"
+    },
+     {
+      file: "mondamusic-lofi-lofi-chill-lofi-girl-491690.mp3",
+      title: "Title Unavailable",
+      artist: "???"
+    },
+     {
+      file: "mondamusic-lofi-lofi-girl-lofi-chill-512853.mp3",
+      title: "Title Unavailable",
+      artist: "???"
+    },
+     {
+      file: "sonican-lo-fi-music-loop-sentimental-jazzy-love-473154.mp3",
+      title: "Title Unavailable",
+      artist: "???"
+    },
+     {
+      file: "watermello-lofi-chill-lofi-girl-lofi-488388.mp3",
+      title: "Title Unavailable",
+      artist: "???"
+    },
+     {
+      file: "watermello-lofi-lofi-girl-lofi-chill-484610.mp3",
+      title: "Title Unavailable",
+      artist: "???"
     }
   ];
   
@@ -210,9 +265,9 @@
       
       const musicBar = blockerDiv.querySelector('#music-control-bar');
       if (musicBar) {
-        musicBar.style.background = 'rgba(255, 255, 255, 0.95)';
+        musicBar.style.background = 'transparent';
         musicBar.style.border = '1px solid rgba(52, 152, 219, 0.3)';
-        musicBar.style.boxShadow = '0 4px 20px rgba(0, 0, 0, 0.08)';
+        musicBar.style.backdropFilter = 'none';
       }
       
       const nowPlayingText = blockerDiv.querySelector('#now-playing-text');
@@ -256,8 +311,9 @@
       
       const musicBar = blockerDiv.querySelector('#music-control-bar');
       if (musicBar) {
-        musicBar.style.background = 'rgba(15, 23, 42, 0.9)';
+        musicBar.style.background = 'transparent';
         musicBar.style.border = '1px solid rgba(100, 200, 255, 0.2)';
+        musicBar.style.backdropFilter = 'none';
       }
       
       const nowPlayingText = blockerDiv.querySelector('#now-playing-text');
@@ -1063,7 +1119,8 @@
         </svg>
       </div>
       
-      <div style="text-align: center; padding: 2rem; max-width: 400px; width: 85%; margin: auto; animation: fadeInScale 0.6s cubic-bezier(0.2, 0.9, 0.4, 1.1) forwards; position: relative; z-index: 10;">
+      <!-- Main Content Container - HIGH Z-INDEX to appear above noise -->
+      <div style="text-align: center; padding: 2rem; max-width: 400px; width: 85%; margin: auto; animation: fadeInScale 0.6s cubic-bezier(0.2, 0.9, 0.4, 1.1) forwards; position: relative; z-index: 2147483647;">
         <div style="margin-bottom: 1.5rem;">
           <div style="font-size: 4rem; margin-bottom: 0.75rem; display: inline-block; animation: ${iconAnimation};">${randomIcon.emoji}</div>
           <h1 style="font-size: 2rem; font-weight: 600; margin: 0; letter-spacing: -0.02em; -webkit-background-clip: text; background-clip: text; text-decoration: none; border: none;">
@@ -1085,13 +1142,13 @@
         <p style="font-size: 0.65rem; opacity: 0.4;">Re-enable the site in your extension settings</p>
       </div>
       
-      <!-- Now Playing Text - No backdrop, just glowing text -->
-      <div id="now-playing" style="position: fixed !important; bottom: 140px !important; left: 50% !important; transform: translateX(-50%) !important; z-index: 2147483648 !important; text-align: center !important;">
+      <!-- Now Playing Text - TRANSPARENT BACKGROUND -->
+      <div id="now-playing" style="position: fixed !important; bottom: 140px !important; left: 50% !important; transform: translateX(-50%) !important; z-index: 2147483648 !important; text-align: center !important; background: transparent !important;">
         <span id="now-playing-text" style="font-size: 11px; font-weight: 400; letter-spacing: 0.3px; color: #e2e8f0; text-shadow: 0 0 8px rgba(100, 200, 255, 0.6), 0 0 12px rgba(100, 200, 255, 0.3);">${currentArtist} - ${currentSongTitle}</span>
       </div>
       
-      <!-- Compact Music Control Bar -->
-      <div id="music-control-bar" style="position: fixed !important; bottom: 80px !important; left: 50% !important; transform: translateX(-50%) !important; background: rgba(15, 23, 42, 0.9) !important; backdrop-filter: blur(10px) !important; border-radius: 50px !important; padding: 8px 20px !important; display: flex !important; gap: 16px !important; align-items: center !important; border: 1px solid rgba(100, 200, 255, 0.2) !important; z-index: 2147483648 !important;">
+      <!-- Compact Music Control Bar - FULLY TRANSPARENT -->
+      <div id="music-control-bar" style="position: fixed !important; bottom: 80px !important; left: 50% !important; transform: translateX(-50%) !important; background: transparent !important; backdrop-filter: none !important; border-radius: 50px !important; padding: 8px 20px !important; display: flex !important; gap: 16px !important; align-items: center !important; border: 1px solid rgba(100, 200, 255, 0.3) !important; z-index: 2147483648 !important;">
         
         <div style="display: flex; gap: 8px; align-items: center;">
           <span style="font-size: 12px; color: #88ccff;">🎵</span>

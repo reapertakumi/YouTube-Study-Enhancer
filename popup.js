@@ -6,26 +6,41 @@ const storage = (typeof chrome !== 'undefined' && chrome.storage) ? chrome.stora
 const runtime = (typeof chrome !== 'undefined' && chrome.runtime) ? chrome.runtime : browser.runtime;
 
 const CURRENT_VERSION = runtime.getManifest().version;
+const DEFAULT_PASSWORD = "000";
+let currentPassword = null;
+let isFirstTimeLock = true;
 
 let domainModalOverlay = null;
+let isLocked = false;
 
 document.addEventListener("DOMContentLoaded", () => {
   console.log("Popup loaded - initializing...");
   
-  // Display version only (no update checking)
   const versionDisplay = document.getElementById('versionDisplay');
   if (versionDisplay) {
     versionDisplay.textContent = `Version ${CURRENT_VERSION}`;
   }
   
-  // Hide the update status element
-  const updateStatus = document.getElementById('updateStatus');
-  if (updateStatus) {
-    updateStatus.style.display = 'none';
-  }
+  storage.sync.get(['customPassword'], (data) => {
+    if (data.customPassword) {
+      currentPassword = data.customPassword;
+      isFirstTimeLock = false;
+    } else {
+      currentPassword = null;
+      isFirstTimeLock = true;
+    }
+  });
   
-  // Load all settings
-  storage.sync.get([...allIds, "hideFeedMode", "theme"], (data) => {
+  storage.sync.get(['isLocked'], (data) => {
+    isLocked = data.isLocked === true;
+    updateLockUI();
+    setTimeout(() => {
+      initClickableCards();
+      makeCustomDomainsClickable();
+    }, 100);
+  });
+  
+  storage.sync.get([...allIds, "hideFeedMode", "theme", "youtubeCollapsed", "blockCollapsed"], (data) => {
     console.log("Loaded settings:", data);
     
     allIds.forEach(id => {
@@ -35,41 +50,58 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
     
-    const currentMode = data.hideFeedMode || "remove";
-    const feedModeToggle = document.getElementById('feedModeToggle');
-    const modeDescription = document.getElementById('modeDescription');
+    const youtubeContent = document.getElementById('youtubeContent');
+    const blockContent = document.getElementById('blockContent');
+    const youtubeArrow = document.getElementById('youtubeArrow');
+    const blockArrow = document.getElementById('blockArrow');
     
-    if (feedModeToggle) {
-      feedModeToggle.checked = (currentMode === 'hide');
-    }
-    if (modeDescription) {
-      if (currentMode === 'remove') {
-        modeDescription.textContent = 'Remove Mode: Removes feed and expands video to full width';
+    if (youtubeContent) youtubeContent.style.transition = 'none';
+    if (blockContent) blockContent.style.transition = 'none';
+    
+    if (youtubeContent && youtubeArrow) {
+      if (data.youtubeCollapsed === true) {
+        youtubeContent.classList.add('collapsed');
+        youtubeArrow.classList.add('collapsed');
       } else {
-        modeDescription.textContent = 'Hide Mode: Hides feed but keeps original video size';
+        youtubeContent.classList.remove('collapsed');
+        youtubeArrow.classList.remove('collapsed');
       }
     }
+    
+    if (blockContent && blockArrow) {
+      if (data.blockCollapsed === true) {
+        blockContent.classList.add('collapsed');
+        blockArrow.classList.add('collapsed');
+      } else {
+        blockContent.classList.remove('collapsed');
+        blockArrow.classList.remove('collapsed');
+      }
+    }
+    
+    setTimeout(() => {
+      if (youtubeContent) youtubeContent.style.transition = '';
+      if (blockContent) blockContent.style.transition = '';
+    }, 50);
   });
 
-  // Load custom domains
   loadCustomDomains();
 
-  // Add change listeners to all toggles
   allIds.forEach(id => {
     const element = document.getElementById(id);
     if (element) {
       element.addEventListener("change", (e) => {
+        if (isLocked) {
+          e.preventDefault();
+          return;
+        }
         const value = e.target.checked;
-        console.log(`Setting ${id} to:`, value);
         storage.sync.set({ [id]: value }, () => {
-          console.log(`Saved ${id}:`, value);
           notifyAllTabs();
         });
       });
     }
   });
 
-  // Theme toggle
   const themeToggle = document.getElementById('themeToggle');
   const moonIcon = document.querySelector('.moon-icon');
   const sunIcon = document.querySelector('.sun-icon');
@@ -89,7 +121,6 @@ document.addEventListener("DOMContentLoaded", () => {
   if (themeToggle) {
     themeToggle.addEventListener('click', () => {
       const isLight = document.body.classList.contains('light-theme');
-      
       if (isLight) {
         document.body.classList.remove('light-theme');
         if (moonIcon) moonIcon.style.display = 'block';
@@ -104,79 +135,411 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // Add custom domain button
   const addDomainBtn = document.getElementById('addDomainBtn');
   if (addDomainBtn) {
     addDomainBtn.addEventListener('click', () => {
+      if (isLocked) return;
       showAddDomainModal();
     });
   }
 
-  // Feed mode modal
-  const settingsWheelBtn = document.getElementById('settingsWheelBtn');
-  const feedModeModal = document.getElementById('feedModeModal');
-  const closeModalBtn = document.getElementById('closeModalBtn');
-  const feedModeToggle = document.getElementById('feedModeToggle');
-  const modeDescription = document.getElementById('modeDescription');
-
-  if (settingsWheelBtn) {
-    settingsWheelBtn.addEventListener('click', () => {
-      if (feedModeModal) feedModeModal.style.display = 'flex';
-    });
-  }
-
-  function closeModal() {
-    if (feedModeModal) feedModeModal.style.display = 'none';
-  }
-
-  if (closeModalBtn) {
-    closeModalBtn.addEventListener('click', closeModal);
-  }
-
-  window.addEventListener('click', (e) => {
-    if (e.target === feedModeModal) {
-      closeModal();
-    }
-  });
-
-  if (feedModeToggle) {
-    feedModeToggle.addEventListener('change', (e) => {
-      const mode = e.target.checked ? 'hide' : 'remove';
-      storage.sync.set({ hideFeedMode: mode }, () => {
-        console.log(`Hide feed mode set to: ${mode}`);
-        notifyAllTabs();
-      });
-      if (modeDescription) {
-        if (mode === 'remove') {
-          modeDescription.textContent = 'Remove Mode: Removes feed and expands video to full width';
+  const lockBtn = document.getElementById('lockBtn');
+  if (lockBtn) {
+    lockBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      
+      if (isLocked) {
+        showPasswordModal();
+      } else {
+        if (currentPassword === null || isFirstTimeLock) {
+          showSetupPasswordModal();
         } else {
-          modeDescription.textContent = 'Hide Mode: Hides feed but keeps original video size';
+          setLocked(true);
         }
       }
     });
   }
 
-  // Initialize clickable cards
-  initClickableCards();
+  const settingsWheelBtn = document.getElementById('settingsWheelBtn');
+  
+  if (settingsWheelBtn) {
+    settingsWheelBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      console.log("Cogwheel clicked - opening settings modal");
+      openSettingsModal();
+    });
+  }
+
+  setupCollapseHandlers();
+  setupSettingsModal();
+  
+  setTimeout(() => {
+    initClickableCards();
+  }, 100);
 });
+
+function updateLockUI() {
+  const lockBtn = document.getElementById('lockBtn');
+  const openIcon = lockBtn?.querySelector('.lock-icon.open');
+  const closedIcon = lockBtn?.querySelector('.lock-icon.closed');
+  
+  if (isLocked) {
+    document.body.classList.add('locked');
+    if (openIcon) openIcon.style.display = 'none';
+    if (closedIcon) closedIcon.style.display = 'block';
+  } else {
+    document.body.classList.remove('locked');
+    if (openIcon) openIcon.style.display = 'block';
+    if (closedIcon) closedIcon.style.display = 'none';
+  }
+}
+
+function setLocked(locked) {
+  isLocked = locked;
+  storage.sync.set({ isLocked: locked });
+  updateLockUI();
+  
+  setTimeout(() => {
+    initClickableCards();
+    makeCustomDomainsClickable();
+  }, 50);
+}
+
+function showPasswordModal() {
+  const passwordModal = document.getElementById('passwordModal');
+  const passwordInput = document.getElementById('passwordInput');
+  const passwordError = document.getElementById('passwordError');
+  
+  if (passwordInput) passwordInput.value = '';
+  if (passwordError) passwordError.textContent = '';
+  
+  if (passwordModal) {
+    passwordModal.style.display = 'flex';
+    setTimeout(() => {
+      passwordInput?.focus();
+    }, 100);
+  }
+  
+  const submitBtn = document.getElementById('passwordSubmitBtn');
+  const cancelBtn = document.getElementById('passwordCancelBtn');
+  
+  const newSubmitBtn = submitBtn?.cloneNode(true);
+  const newCancelBtn = cancelBtn?.cloneNode(true);
+  
+  if (submitBtn && newSubmitBtn) {
+    submitBtn.parentNode?.replaceChild(newSubmitBtn, submitBtn);
+    newSubmitBtn.addEventListener('click', () => {
+      const enteredPassword = passwordInput?.value || '';
+      if (enteredPassword === currentPassword) {
+        passwordModal.style.display = 'none';
+        setLocked(false);
+      } else {
+        if (passwordError) passwordError.textContent = 'Incorrect password';
+        if (passwordInput) {
+          passwordInput.value = '';
+          passwordInput.focus();
+        }
+      }
+    });
+  }
+  
+  if (cancelBtn && newCancelBtn) {
+    cancelBtn.parentNode?.replaceChild(newCancelBtn, cancelBtn);
+    newCancelBtn.addEventListener('click', () => {
+      passwordModal.style.display = 'none';
+    });
+  }
+  
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter') {
+      const enteredPassword = passwordInput?.value || '';
+      if (enteredPassword === currentPassword) {
+        passwordModal.style.display = 'none';
+        setLocked(false);
+      } else {
+        if (passwordError) passwordError.textContent = 'Incorrect password';
+        if (passwordInput) {
+          passwordInput.value = '';
+          passwordInput.focus();
+        }
+      }
+    }
+  };
+  
+  passwordInput?.removeEventListener('keypress', handleKeyPress);
+  passwordInput?.addEventListener('keypress', handleKeyPress);
+  
+  const closeOnOutside = (e) => {
+    if (e.target === passwordModal) {
+      passwordModal.style.display = 'none';
+      document.removeEventListener('click', closeOnOutside);
+    }
+  };
+  document.addEventListener('click', closeOnOutside);
+}
+
+function showSetupPasswordModal() {
+  const changePasswordModal = document.getElementById('changePasswordModal');
+  const currentPasswordInput = document.getElementById('currentPasswordInput');
+  const newPasswordInput = document.getElementById('newPasswordInput');
+  const confirmPasswordInput = document.getElementById('confirmPasswordInput');
+  const changePasswordError = document.getElementById('changePasswordError');
+  
+  if (currentPasswordInput) {
+    currentPasswordInput.style.display = 'none';
+    currentPasswordInput.value = '';
+  }
+  
+  const modalHeader = changePasswordModal?.querySelector('.password-modal-header span');
+  if (modalHeader) modalHeader.textContent = 'Set Password';
+  
+  if (newPasswordInput) newPasswordInput.value = '';
+  if (confirmPasswordInput) confirmPasswordInput.value = '';
+  if (changePasswordError) changePasswordError.textContent = '';
+  
+  if (changePasswordModal) {
+    changePasswordModal.style.display = 'flex';
+    setTimeout(() => {
+      newPasswordInput?.focus();
+    }, 100);
+  }
+  
+  const submitBtn = document.getElementById('changePasswordSubmitBtn');
+  const cancelBtn = document.getElementById('changePasswordCancelBtn');
+  
+  const newSubmitBtn = submitBtn?.cloneNode(true);
+  const newCancelBtn = cancelBtn?.cloneNode(true);
+  
+  if (submitBtn && newSubmitBtn) {
+    submitBtn.parentNode?.replaceChild(newSubmitBtn, submitBtn);
+    newSubmitBtn.addEventListener('click', () => {
+      const newPwd = newPasswordInput?.value || '';
+      const confirmPwd = confirmPasswordInput?.value || '';
+      
+      if (newPwd.length === 0) {
+        if (changePasswordError) changePasswordError.textContent = 'Password cannot be empty';
+        return;
+      }
+      
+      if (newPwd !== confirmPwd) {
+        if (changePasswordError) changePasswordError.textContent = 'Passwords do not match';
+        return;
+      }
+      
+      currentPassword = newPwd;
+      isFirstTimeLock = false;
+      storage.sync.set({ customPassword: currentPassword });
+      changePasswordModal.style.display = 'none';
+      
+      if (currentPasswordInput) currentPasswordInput.style.display = 'block';
+      if (modalHeader) modalHeader.textContent = 'Change Password';
+      
+      setLocked(true);
+    });
+  }
+  
+  if (cancelBtn && newCancelBtn) {
+    cancelBtn.parentNode?.replaceChild(newCancelBtn, cancelBtn);
+    newCancelBtn.addEventListener('click', () => {
+      changePasswordModal.style.display = 'none';
+      if (currentPasswordInput) currentPasswordInput.style.display = 'block';
+      if (modalHeader) modalHeader.textContent = 'Change Password';
+    });
+  }
+  
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter') {
+      const newPwd = newPasswordInput?.value || '';
+      const confirmPwd = confirmPasswordInput?.value || '';
+      
+      if (newPwd.length === 0) {
+        if (changePasswordError) changePasswordError.textContent = 'Password cannot be empty';
+        return;
+      }
+      
+      if (newPwd !== confirmPwd) {
+        if (changePasswordError) changePasswordError.textContent = 'Passwords do not match';
+        return;
+      }
+      
+      currentPassword = newPwd;
+      isFirstTimeLock = false;
+      storage.sync.set({ customPassword: currentPassword });
+      changePasswordModal.style.display = 'none';
+      
+      if (currentPasswordInput) currentPasswordInput.style.display = 'block';
+      if (modalHeader) modalHeader.textContent = 'Change Password';
+      setLocked(true);
+    }
+  };
+  
+  newPasswordInput?.removeEventListener('keypress', handleKeyPress);
+  newPasswordInput?.addEventListener('keypress', handleKeyPress);
+  confirmPasswordInput?.removeEventListener('keypress', handleKeyPress);
+  confirmPasswordInput?.addEventListener('keypress', handleKeyPress);
+  
+  const closeOnOutside = (e) => {
+    if (e.target === changePasswordModal) {
+      changePasswordModal.style.display = 'none';
+      if (currentPasswordInput) currentPasswordInput.style.display = 'block';
+      if (modalHeader) modalHeader.textContent = 'Change Password';
+      document.removeEventListener('click', closeOnOutside);
+    }
+  };
+  document.addEventListener('click', closeOnOutside);
+}
+
+function showChangePasswordModal() {
+  const changePasswordModal = document.getElementById('changePasswordModal');
+  const currentPasswordInput = document.getElementById('currentPasswordInput');
+  const newPasswordInput = document.getElementById('newPasswordInput');
+  const confirmPasswordInput = document.getElementById('confirmPasswordInput');
+  const changePasswordError = document.getElementById('changePasswordError');
+  const modalHeader = changePasswordModal?.querySelector('.password-modal-header span');
+  
+  if (currentPasswordInput) {
+    currentPasswordInput.style.display = 'block';
+    currentPasswordInput.value = '';
+  }
+  if (modalHeader) modalHeader.textContent = 'Change Password';
+  if (newPasswordInput) newPasswordInput.value = '';
+  if (confirmPasswordInput) confirmPasswordInput.value = '';
+  if (changePasswordError) changePasswordError.textContent = '';
+  
+  if (changePasswordModal) {
+    changePasswordModal.style.display = 'flex';
+    setTimeout(() => {
+      currentPasswordInput?.focus();
+    }, 100);
+  }
+  
+  const submitBtn = document.getElementById('changePasswordSubmitBtn');
+  const cancelBtn = document.getElementById('changePasswordCancelBtn');
+  
+  const newSubmitBtn = submitBtn?.cloneNode(true);
+  const newCancelBtn = cancelBtn?.cloneNode(true);
+  
+  if (submitBtn && newSubmitBtn) {
+    submitBtn.parentNode?.replaceChild(newSubmitBtn, submitBtn);
+    newSubmitBtn.addEventListener('click', () => {
+      const currentPwd = currentPasswordInput?.value || '';
+      const newPwd = newPasswordInput?.value || '';
+      const confirmPwd = confirmPasswordInput?.value || '';
+      
+      if (currentPwd !== currentPassword) {
+        if (changePasswordError) changePasswordError.textContent = 'Current password is incorrect';
+        return;
+      }
+      
+      if (newPwd.length === 0) {
+        if (changePasswordError) changePasswordError.textContent = 'New password cannot be empty';
+        return;
+      }
+      
+      if (newPwd !== confirmPwd) {
+        if (changePasswordError) changePasswordError.textContent = 'New passwords do not match';
+        return;
+      }
+      
+      currentPassword = newPwd;
+      storage.sync.set({ customPassword: currentPassword });
+      changePasswordModal.style.display = 'none';
+      console.log('Password changed successfully');
+    });
+  }
+  
+  if (cancelBtn && newCancelBtn) {
+    cancelBtn.parentNode?.replaceChild(newCancelBtn, cancelBtn);
+    newCancelBtn.addEventListener('click', () => {
+      changePasswordModal.style.display = 'none';
+    });
+  }
+  
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter') {
+      const currentPwd = currentPasswordInput?.value || '';
+      const newPwd = newPasswordInput?.value || '';
+      const confirmPwd = confirmPasswordInput?.value || '';
+      
+      if (currentPwd !== currentPassword) {
+        if (changePasswordError) changePasswordError.textContent = 'Current password is incorrect';
+        return;
+      }
+      
+      if (newPwd.length === 0) {
+        if (changePasswordError) changePasswordError.textContent = 'New password cannot be empty';
+        return;
+      }
+      
+      if (newPwd !== confirmPwd) {
+        if (changePasswordError) changePasswordError.textContent = 'New passwords do not match';
+        return;
+      }
+      
+      currentPassword = newPwd;
+      storage.sync.set({ customPassword: currentPassword });
+      changePasswordModal.style.display = 'none';
+    }
+  };
+  
+  currentPasswordInput?.removeEventListener('keypress', handleKeyPress);
+  currentPasswordInput?.addEventListener('keypress', handleKeyPress);
+  newPasswordInput?.removeEventListener('keypress', handleKeyPress);
+  newPasswordInput?.addEventListener('keypress', handleKeyPress);
+  confirmPasswordInput?.removeEventListener('keypress', handleKeyPress);
+  confirmPasswordInput?.addEventListener('keypress', handleKeyPress);
+  
+  const closeOnOutside = (e) => {
+    if (e.target === changePasswordModal) {
+      changePasswordModal.style.display = 'none';
+      document.removeEventListener('click', closeOnOutside);
+    }
+  };
+  document.addEventListener('click', closeOnOutside);
+}
+
+function setupCollapseHandlers() {
+  const youtubeHeader = document.getElementById('youtubeHeader');
+  const youtubeContent = document.getElementById('youtubeContent');
+  const youtubeArrow = document.getElementById('youtubeArrow');
+  
+  if (youtubeHeader && youtubeContent && youtubeArrow) {
+    youtubeHeader.addEventListener('click', (e) => {
+      if (e.target.closest('#settingsWheelBtn')) return;
+      if (e.target.closest('#lockBtn')) return;
+      e.stopPropagation();
+      youtubeContent.classList.toggle('collapsed');
+      youtubeArrow.classList.toggle('collapsed');
+      const isCollapsed = youtubeContent.classList.contains('collapsed');
+      storage.sync.set({ youtubeCollapsed: isCollapsed });
+    });
+  }
+  
+  const blockHeader = document.getElementById('blockHeader');
+  const blockContent = document.getElementById('blockContent');
+  const blockArrow = document.getElementById('blockArrow');
+  
+  if (blockHeader && blockContent && blockArrow) {
+    blockHeader.addEventListener('click', (e) => {
+      if (e.target.closest('#settingsWheelBtn')) return;
+      if (e.target.closest('#lockBtn')) return;
+      e.stopPropagation();
+      blockContent.classList.toggle('collapsed');
+      blockArrow.classList.toggle('collapsed');
+      const isCollapsed = blockContent.classList.contains('collapsed');
+      storage.sync.set({ blockCollapsed: isCollapsed });
+    });
+  }
+}
 
 function notifyAllTabs() {
   storage.sync.get([...blockIds, 'customDomains', 'hideFeedMode'], (data) => {
-    const message = {
-      type: 'SETTINGS_UPDATED',
-      settings: data
-    };
-    
+    const message = { type: 'SETTINGS_UPDATED', settings: data };
     if (typeof chrome !== 'undefined' && chrome.tabs) {
       chrome.tabs.query({}, (tabs) => {
         tabs.forEach(tab => {
           chrome.tabs.sendMessage(tab.id, message).catch(() => {});
-        });
-      });
-    } else if (typeof browser !== 'undefined' && browser.tabs) {
-      browser.tabs.query({}).then((tabs) => {
-        tabs.forEach(tab => {
-          browser.tabs.sendMessage(tab.id, message).catch(() => {});
         });
       });
     }
@@ -188,14 +551,11 @@ function loadCustomDomains() {
     const customDomains = data.customDomains || {};
     const container = document.getElementById('customDomainsContainer');
     if (!container) return;
-    
     container.innerHTML = '';
-    
     Object.entries(customDomains).forEach(([domain, enabled]) => {
       const domainCard = createDomainCard(domain, enabled);
       container.appendChild(domainCard);
     });
-    
     setTimeout(() => {
       makeCustomDomainsClickable();
     }, 50);
@@ -221,6 +581,11 @@ function createDomainCard(domain, enabled) {
   checkbox.type = 'checkbox';
   checkbox.checked = enabled;
   checkbox.addEventListener('change', (e) => {
+    if (isLocked) {
+      e.stopPropagation();
+      e.preventDefault();
+      return;
+    }
     e.stopPropagation();
     updateCustomDomain(domain, e.target.checked);
   });
@@ -234,16 +599,15 @@ function createDomainCard(domain, enabled) {
   deleteBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>`;
   deleteBtn.title = 'Remove domain';
   deleteBtn.addEventListener('click', (e) => {
+    if (isLocked) return;
     e.stopPropagation();
     removeCustomDomain(domain);
   });
   
   actionsDiv.appendChild(toggleSwitch);
   actionsDiv.appendChild(deleteBtn);
-  
   card.appendChild(domainSpan);
   card.appendChild(actionsDiv);
-  
   return card;
 }
 
@@ -252,7 +616,6 @@ function updateCustomDomain(domain, enabled) {
     const customDomains = data.customDomains || {};
     customDomains[domain] = enabled;
     storage.sync.set({ customDomains }, () => {
-      console.log(`Updated custom domain ${domain}: ${enabled}`);
       notifyAllTabs();
     });
   });
@@ -263,7 +626,6 @@ function removeCustomDomain(domain) {
     const customDomains = data.customDomains || {};
     delete customDomains[domain];
     storage.sync.set({ customDomains }, () => {
-      console.log(`Removed custom domain: ${domain}`);
       loadCustomDomains();
       notifyAllTabs();
     });
@@ -288,10 +650,8 @@ function addCustomDomain(domain) {
       alert('This domain is already in your block list');
       return false;
     }
-    
     customDomains[cleanDomain] = true;
     storage.sync.set({ customDomains }, () => {
-      console.log(`Added custom domain: ${cleanDomain}`);
       loadCustomDomains();
       notifyAllTabs();
     });
@@ -300,9 +660,9 @@ function addCustomDomain(domain) {
 }
 
 function showAddDomainModal() {
-  if (domainModalOverlay) {
-    domainModalOverlay.remove();
-  }
+  if (isLocked) return;
+  
+  if (domainModalOverlay) domainModalOverlay.remove();
   
   domainModalOverlay = document.createElement('div');
   domainModalOverlay.className = 'modal-overlay';
@@ -345,11 +705,6 @@ function showAddDomainModal() {
       if (domain) {
         addCustomDomain(domain);
         closeDomainModal();
-      } else {
-        input.style.borderColor = '#dc3545';
-        setTimeout(() => {
-          input.style.borderColor = '';
-        }, 1500);
       }
     });
   }
@@ -359,9 +714,7 @@ function showAddDomainModal() {
   }
   
   domainModalOverlay.addEventListener('click', (e) => {
-    if (e.target === domainModalOverlay) {
-      closeDomainModal();
-    }
+    if (e.target === domainModalOverlay) closeDomainModal();
   });
 }
 
@@ -372,10 +725,9 @@ function closeDomainModal() {
   }
 }
 
-// ==================== CLICKABLE CARDS FEATURE ====================
-
 function initClickableCards() {
-  const clickableCards = document.querySelectorAll('.card:not(.updater-card)');
+  console.log("Initializing clickable cards...");
+  const clickableCards = document.querySelectorAll('.card');
   
   clickableCards.forEach(card => {
     const checkbox = card.querySelector('input[type="checkbox"]');
@@ -386,32 +738,28 @@ function initClickableCards() {
     }
     
     const clickHandler = (event) => {
+      if (isLocked) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+      
       let target = event.target;
       let isSwitchElement = false;
       
       while (target && target !== card) {
-        if (target.classList && target.classList.contains('switch')) {
-          isSwitchElement = true;
-          break;
-        }
-        if (target.tagName === 'LABEL' && target.classList.contains('switch')) {
-          isSwitchElement = true;
-          break;
-        }
-        if (target.tagName === 'INPUT' && target.type === 'checkbox') {
-          isSwitchElement = true;
-          break;
-        }
-        if (target.classList && target.classList.contains('slider')) {
+        if (target.classList?.contains('switch') || 
+            target.classList?.contains('slider') ||
+            target.tagName === 'LABEL' ||
+            (target.tagName === 'INPUT' && target.type === 'checkbox') ||
+            target.classList?.contains('delete-domain-btn')) {
           isSwitchElement = true;
           break;
         }
         target = target.parentNode;
       }
       
-      if (isSwitchElement) {
-        return;
-      }
+      if (isSwitchElement) return;
       
       event.preventDefault();
       checkbox.checked = !checkbox.checked;
@@ -423,13 +771,10 @@ function initClickableCards() {
     card.addEventListener('click', clickHandler);
     card.style.cursor = 'pointer';
   });
-  
-  makeCustomDomainsClickable();
 }
 
 function makeCustomDomainsClickable() {
   const customCards = document.querySelectorAll('.custom-domain-card');
-  
   customCards.forEach(card => {
     const checkbox = card.querySelector('input[type="checkbox"]');
     if (!checkbox) return;
@@ -439,54 +784,191 @@ function makeCustomDomainsClickable() {
     }
     
     const clickHandler = (event) => {
-      let target = event.target;
-      let isDeleteClick = false;
-      while (target && target !== card) {
-        if (target.classList && target.classList.contains('delete-domain-btn')) {
-          isDeleteClick = true;
-          break;
-        }
-        if (target.tagName === 'BUTTON' && target.classList.contains('delete-domain-btn')) {
-          isDeleteClick = true;
-          break;
-        }
-        target = target.parentNode;
-      }
-      
-      if (isDeleteClick) {
-        return;
-      }
-      
-      target = event.target;
-      let isSwitchClick = false;
-      while (target && target !== card) {
-        if (target.classList && target.classList.contains('switch')) {
-          isSwitchClick = true;
-          break;
-        }
-        if (target.tagName === 'INPUT' && target.type === 'checkbox') {
-          isSwitchClick = true;
-          break;
-        }
-        if (target.classList && target.classList.contains('slider')) {
-          isSwitchClick = true;
-          break;
-        }
-        target = target.parentNode;
-      }
-      
-      if (isSwitchClick) {
-        return;
-      }
-      
+      if (isLocked) return;
+      if (event.target.closest('.delete-domain-btn')) return;
+      if (event.target.closest('.switch')) return;
       event.preventDefault();
       checkbox.checked = !checkbox.checked;
-      const changeEvent = new Event('change', { bubbles: true });
-      checkbox.dispatchEvent(changeEvent);
+      checkbox.dispatchEvent(new Event('change', { bubbles: true }));
     };
     
     card._customClickHandler = clickHandler;
     card.addEventListener('click', clickHandler);
     card.style.cursor = 'pointer';
+  });
+}
+
+let settingsModalOpen = false;
+
+function openSettingsModal() {
+  const settingsModal = document.getElementById('settingsModal');
+  if (settingsModal) {
+    settingsModal.style.display = 'flex';
+    settingsModalOpen = true;
+    loadSettingsModalValues();
+  }
+}
+
+function closeSettingsModal() {
+  const settingsModal = document.getElementById('settingsModal');
+  if (settingsModal) {
+    settingsModal.style.display = 'none';
+    settingsModalOpen = false;
+  }
+}
+
+function loadSettingsModalValues() {
+  storage.sync.get(['theme', 'hideFeedMode'], (data) => {
+    const darkThemeBtn = document.querySelector('.toggle-option[data-theme="dark"]');
+    const lightThemeBtn = document.querySelector('.toggle-option[data-theme="light"]');
+    
+    if (data.theme === 'light') {
+      lightThemeBtn?.classList.add('active');
+      darkThemeBtn?.classList.remove('active');
+    } else {
+      darkThemeBtn?.classList.add('active');
+      lightThemeBtn?.classList.remove('active');
+    }
+    
+    const removeFeedBtn = document.querySelector('.toggle-option[data-feedmode="remove"]');
+    const hideFeedBtn = document.querySelector('.toggle-option[data-feedmode="hide"]');
+    const settingsModeDescription = document.getElementById('settingsModeDescription');
+    
+    if (data.hideFeedMode === 'hide') {
+      hideFeedBtn?.classList.add('active');
+      removeFeedBtn?.classList.remove('active');
+      if (settingsModeDescription) {
+        settingsModeDescription.textContent = 'Hide Mode: Hides feed but keeps original video size';
+      }
+    } else {
+      removeFeedBtn?.classList.add('active');
+      hideFeedBtn?.classList.remove('active');
+      if (settingsModeDescription) {
+        settingsModeDescription.textContent = 'Remove Mode: Removes feed and expands video to full width';
+      }
+    }
+  });
+}
+
+function saveTheme(theme) {
+  storage.sync.set({ theme: theme }, () => {
+    const moonIcon = document.querySelector('.moon-icon');
+    const sunIcon = document.querySelector('.sun-icon');
+    
+    if (theme === 'light') {
+      document.body.classList.add('light-theme');
+      if (moonIcon) moonIcon.style.display = 'none';
+      if (sunIcon) sunIcon.style.display = 'block';
+    } else {
+      document.body.classList.remove('light-theme');
+      if (moonIcon) moonIcon.style.display = 'block';
+      if (sunIcon) sunIcon.style.display = 'none';
+    }
+    notifyAllTabs();
+  });
+}
+
+function saveFeedMode(mode) {
+  storage.sync.set({ hideFeedMode: mode }, () => {
+    notifyAllTabs();
+  });
+}
+
+function setupSettingsModal() {
+  const settingsModal = document.getElementById('settingsModal');
+  const closeSettingsBtn = document.getElementById('closeSettingsBtn');
+  
+  const settingsVersion = document.getElementById('settingsVersion');
+  if (settingsVersion) {
+    settingsVersion.textContent = CURRENT_VERSION;
+  }
+  
+  if (closeSettingsBtn) {
+    closeSettingsBtn.addEventListener('click', closeSettingsModal);
+  }
+  
+  window.addEventListener('click', (e) => {
+    if (e.target === settingsModal && settingsModalOpen) {
+      closeSettingsModal();
+    }
+  });
+  
+  const darkThemeBtn = document.querySelector('.toggle-option[data-theme="dark"]');
+  const lightThemeBtn = document.querySelector('.toggle-option[data-theme="light"]');
+  
+  if (darkThemeBtn) {
+    darkThemeBtn.addEventListener('click', () => {
+      if (!darkThemeBtn.classList.contains('active')) {
+        darkThemeBtn.classList.add('active');
+        lightThemeBtn?.classList.remove('active');
+        saveTheme('dark');
+      }
+    });
+  }
+  
+  if (lightThemeBtn) {
+    lightThemeBtn.addEventListener('click', () => {
+      if (!lightThemeBtn.classList.contains('active')) {
+        lightThemeBtn.classList.add('active');
+        darkThemeBtn?.classList.remove('active');
+        saveTheme('light');
+      }
+    });
+  }
+  
+  const removeFeedBtn = document.querySelector('.toggle-option[data-feedmode="remove"]');
+  const hideFeedBtn = document.querySelector('.toggle-option[data-feedmode="hide"]');
+  const settingsModeDescription = document.getElementById('settingsModeDescription');
+  
+  if (removeFeedBtn) {
+    removeFeedBtn.addEventListener('click', () => {
+      if (!removeFeedBtn.classList.contains('active')) {
+        removeFeedBtn.classList.add('active');
+        hideFeedBtn?.classList.remove('active');
+        if (settingsModeDescription) {
+          settingsModeDescription.textContent = 'Remove Mode: Removes feed and expands video to full width';
+        }
+        saveFeedMode('remove');
+      }
+    });
+  }
+  
+  if (hideFeedBtn) {
+    hideFeedBtn.addEventListener('click', () => {
+      if (!hideFeedBtn.classList.contains('active')) {
+        hideFeedBtn.classList.add('active');
+        removeFeedBtn?.classList.remove('active');
+        if (settingsModeDescription) {
+          settingsModeDescription.textContent = 'Hide Mode: Hides feed but keeps original video size';
+        }
+        saveFeedMode('hide');
+      }
+    });
+  }
+  
+  const changePasswordBtn = document.getElementById('changePasswordBtn');
+  if (changePasswordBtn) {
+    changePasswordBtn.addEventListener('click', () => {
+      showChangePasswordModal();
+    });
+  }
+  
+  const tabBtns = document.querySelectorAll('.settings-tab-btn');
+  tabBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tabName = btn.getAttribute('data-tab');
+      
+      tabBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      
+      const tabContents = document.querySelectorAll('.settings-tab-content');
+      tabContents.forEach(content => content.classList.remove('active'));
+      
+      if (tabName === 'basic') {
+        document.getElementById('basicTab').classList.add('active');
+      } else if (tabName === 'youtube') {
+        document.getElementById('youtubeTab').classList.add('active');
+      }
+    });
   });
 }

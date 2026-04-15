@@ -35,9 +35,10 @@ let updateTimeout = null;
 storage.onChanged.addListener(changes => {
   let needsUpdate = false;
   Object.keys(changes).forEach(key => {
-    if (key in settings) {
+    if (key in settings || key === 'hideFeedMode') {
       settings[key] = changes[key].newValue;
       needsUpdate = true;
+      console.log(`Setting changed: ${key} = ${changes[key].newValue}`);
     }
   });
   if (needsUpdate) {
@@ -53,8 +54,9 @@ storage.onChanged.addListener(changes => {
 if (typeof chrome !== 'undefined' && chrome.runtime) {
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.type === 'SETTINGS_UPDATED' && message.settings) {
+      console.log("Received settings update from popup:", message.settings);
       Object.keys(message.settings).forEach(key => {
-        if (key in settings) {
+        if (key in settings || key === 'hideFeedMode') {
           settings[key] = message.settings[key];
         }
       });
@@ -71,6 +73,7 @@ function init() {
 }
 
 function applyAllFeatures() {
+  console.log("Applying all features - settings:", settings);
   hideShorts();
   handleVideoFeed();
   handleComments();
@@ -94,7 +97,9 @@ function hideShorts() {
   shortsStyleElement.textContent = `
     /* Hide ALL Shorts links and containers instantly */
     [href*="/shorts/"],
-    [href*="/shorts"] {
+    [href*="/shorts"],
+    a[href*="/shorts"],
+    a[href*="/shorts"] * {
       display: none !important;
     }
     
@@ -121,6 +126,22 @@ function hideShorts() {
     ytd-mini-guide-entry-renderer:has([href="/shorts"]) {
       display: none !important;
     }
+    
+    /* Hide the Shorts button in top navigation */
+    ytd-topbar-menu-button-renderer:has([aria-label="Shorts"]),
+    ytd-guide-entry-renderer:has([title="Shorts"]),
+    a[title="Shorts"],
+    [aria-label="Shorts"],
+    [aria-label="Shorts"] * {
+      display: none !important;
+    }
+    
+    /* Hide Shorts tab in video page */
+    ytd-pivot-bar-item-renderer:has([title="Shorts"]),
+    .ytp-pivot-shorts,
+    [role="tab"][aria-label="Shorts"] {
+      display: none !important;
+    }
   `;
   
   document.head.appendChild(shortsStyleElement);
@@ -128,37 +149,81 @@ function hideShorts() {
 
 // ============ VIDEO FEED HANDLING ============
 function findFeedElement() {
-  return document.querySelector('#secondary, #secondary.style-scope.ytd-watch-flexy, ytd-watch-flexy #secondary');
+  // Try all possible YouTube feed selectors
+  const selectors = [
+    '#secondary',
+    '#secondary.style-scope.ytd-watch-flexy',
+    'ytd-watch-flexy #secondary',
+    'ytd-watch-flexy #secondary.ytd-watch-flexy',
+    '#related',
+    'ytd-watch-next-secondary-results-renderer',
+    '#related.ytd-watch-flexy',
+    'div#secondary',
+    'ytd-two-column-browse-results-renderer #secondary',
+    'ytd-watch-flexy div#secondary'
+  ];
+  
+  for (const selector of selectors) {
+    const element = document.querySelector(selector);
+    if (element) {
+      console.log("Found feed element with selector:", selector);
+      return element;
+    }
+  }
+  
+  // Fallback: try to find any sidebar-like element
+  const possibleFeed = document.querySelector('[id*="secondary"], [id*="related"], [id*="sidebar"]');
+  if (possibleFeed) {
+    console.log("Found feed element via fallback:", possibleFeed.id);
+    return possibleFeed;
+  }
+  
+  console.log("No feed element found");
+  return null;
 }
 
 function getComputedDisplay(element) {
   if (!element) return null;
-  const display = window.getComputedStyle(element).display;
-  return display && display !== 'none' ? display : null;
+  try {
+    const display = window.getComputedStyle(element).display;
+    return display && display !== 'none' ? display : null;
+  } catch(e) {
+    return null;
+  }
 }
 
 function storeFeedDisplay(element) {
   if (!element) return;
-  const currentDisplay = getComputedDisplay(element);
-  feedOriginalDisplay = currentDisplay || 'block';
+  try {
+    const currentDisplay = getComputedDisplay(element);
+    feedOriginalDisplay = currentDisplay || 'block';
+    console.log("Stored original display:", feedOriginalDisplay);
+  } catch(e) {
+    feedOriginalDisplay = 'block';
+  }
 }
 
 function applyFullWidthToVideo() {
-  const primary = document.querySelector('#primary, #primary.style-scope.ytd-watch-flexy');
+  const primary = document.querySelector('#primary, #primary.style-scope.ytd-watch-flexy, ytd-watch-flexy #primary');
   if (primary) {
     primary.style.maxWidth = '100%';
     primary.style.width = '100%';
     primary.style.marginTop = '0';
+    primary.style.paddingRight = '0';
   }
   
-  const selectors = [
-    '#player-container-outer', '#player-container', '#movie_player',
-    '.html5-video-player', 'video', '#player-container-inner',
-    '#ytd-player', '.ytp-player-wrapper', '.ytp-chrome-bottom',
-    '.ytp-progress-bar', '.ytp-progress-list'
+  // Make video container full width
+  const videoContainers = [
+    '#player-container-outer',
+    '#player-container',
+    '#movie_player',
+    '.html5-video-player',
+    '#player-container-inner',
+    '#ytd-player',
+    '.ytp-player-wrapper'
   ];
   
-  selectors.forEach(selector => {
+  videoContainers.forEach(selector => {
     const elements = document.querySelectorAll(selector);
     elements.forEach(el => {
       if (el) {
@@ -168,16 +233,14 @@ function applyFullWidthToVideo() {
     });
   });
   
+  // Force YouTube's flex layout to expand
   const watchFlexy = document.querySelector('ytd-watch-flexy');
   if (watchFlexy) {
     watchFlexy.style.setProperty('--ytd-watch-flexy-secondary-width', '0px', 'important');
+    watchFlexy.style.setProperty('--ytd-watch-flexy-primary-width', '100%', 'important');
   }
   
-  const content = document.querySelector('#content.style-scope.ytd-page-manager');
-  if (content) {
-    content.style.maxWidth = '100%';
-  }
-  
+  // Add style for full width
   let style = document.getElementById('study-enhancer-fullwidth');
   if (!style) {
     style = document.createElement('style');
@@ -188,6 +251,10 @@ function applyFullWidthToVideo() {
     ytd-watch-flexy #primary.ytd-watch-flexy {
       max-width: 100% !important;
       width: 100% !important;
+      flex: 1 !important;
+    }
+    ytd-watch-flexy[flexy] #primary.ytd-watch-flexy {
+      max-width: 100% !important;
     }
     .html5-video-player, .ytp-player-wrapper {
       width: 100% !important;
@@ -197,28 +264,29 @@ function applyFullWidthToVideo() {
       width: 100% !important;
       left: 0 !important;
     }
-    .ytp-progress-bar, .ytp-progress-list {
-      width: 100% !important;
-    }
   `;
 }
 
 function restoreOriginalVideoWidth() {
-  const primary = document.querySelector('#primary, #primary.style-scope.ytd-watch-flexy');
+  const primary = document.querySelector('#primary, #primary.style-scope.ytd-watch-flexy, ytd-watch-flexy #primary');
   if (primary) {
     primary.style.maxWidth = '';
     primary.style.width = '';
     primary.style.marginTop = '';
+    primary.style.paddingRight = '';
   }
   
-  const selectors = [
-    '#player-container-outer', '#player-container', '#movie_player',
-    '.html5-video-player', 'video', '#player-container-inner',
-    '#ytd-player', '.ytp-player-wrapper', '.ytp-chrome-bottom',
-    '.ytp-progress-bar', '.ytp-progress-list'
+  const videoContainers = [
+    '#player-container-outer',
+    '#player-container',
+    '#movie_player',
+    '.html5-video-player',
+    '#player-container-inner',
+    '#ytd-player',
+    '.ytp-player-wrapper'
   ];
   
-  selectors.forEach(selector => {
+  videoContainers.forEach(selector => {
     const elements = document.querySelectorAll(selector);
     elements.forEach(el => {
       if (el) {
@@ -231,11 +299,7 @@ function restoreOriginalVideoWidth() {
   const watchFlexy = document.querySelector('ytd-watch-flexy');
   if (watchFlexy) {
     watchFlexy.style.removeProperty('--ytd-watch-flexy-secondary-width');
-  }
-  
-  const content = document.querySelector('#content.style-scope.ytd-page-manager');
-  if (content) {
-    content.style.maxWidth = '';
+    watchFlexy.style.removeProperty('--ytd-watch-flexy-primary-width');
   }
   
   const style = document.getElementById('study-enhancer-fullwidth');
@@ -243,17 +307,22 @@ function restoreOriginalVideoWidth() {
 }
 
 function handleVideoFeed() {
+  console.log("handleVideoFeed called - sidebar:", settings.sidebar, "mode:", settings.hideFeedMode);
+  
   if (!settings.sidebar) {
     restoreVideoFeed();
     return;
   }
   
   if (settings.hideFeedMode === "remove") {
+    console.log("Applying REMOVE mode");
     applyRemoveMode();
   } else {
+    console.log("Applying HIDE mode");
     applyHideMode();
   }
   
+  // Hide fullscreen grid if present
   const fullscreenGrid = document.querySelector('.ytp-fullscreen-grid-stills-container');
   if (fullscreenGrid) {
     fullscreenGrid.style.display = 'none';
@@ -262,19 +331,30 @@ function handleVideoFeed() {
 
 function applyRemoveMode() {
   const feed = findFeedElement();
-  if (!feed) return;
+  if (!feed) {
+    console.log("Feed element not found for remove mode");
+    return;
+  }
   
+  console.log("Apply remove mode - hiding feed completely");
+  
+  // Clear any previous visibility/opacity styles
   feed.style.visibility = '';
   feed.style.opacity = '';
   feed.style.pointerEvents = '';
   
-  if (feedOriginalDisplay === null || feed.style.display !== 'none') {
+  // Store original display if needed
+  if (feedOriginalDisplay === null) {
     storeFeedDisplay(feed);
   }
   
+  // Hide the feed
   feed.style.display = 'none';
+  
+  // Expand video to full width
   applyFullWidthToVideo();
   
+  // Trigger resize to fix any layout issues
   if (resizeTimeout) clearTimeout(resizeTimeout);
   resizeTimeout = setTimeout(() => {
     window.dispatchEvent(new Event('resize'));
@@ -283,47 +363,58 @@ function applyRemoveMode() {
 
 function applyHideMode() {
   const feed = findFeedElement();
-  if (!feed) return;
+  if (!feed) {
+    console.log("Feed element not found for hide mode");
+    return;
+  }
   
+  console.log("Apply hide mode - making feed invisible but keeping space");
+  
+  // Store original display if needed
   if (feedOriginalDisplay === null) {
     storeFeedDisplay(feed);
   }
   
+  // Restore display if it was set to none
   if (feed.style.display === 'none') {
     feed.style.display = feedOriginalDisplay || '';
   }
   
+  // Hide visually but keep layout space
   feed.style.visibility = 'hidden';
   feed.style.opacity = '0';
   feed.style.pointerEvents = 'none';
+  
+  // Don't expand video - keep original size
+  restoreOriginalVideoWidth();
 }
 
 function restoreVideoFeed() {
   const feed = findFeedElement();
-  if (!feed) return;
+  if (!feed) {
+    console.log("Feed element not found for restore");
+    return;
+  }
   
+  console.log("Restoring video feed");
+  
+  // Restore all feed styles
   feed.style.display = feedOriginalDisplay || '';
   feed.style.visibility = '';
   feed.style.opacity = '';
   feed.style.pointerEvents = '';
   
-  const primary = document.querySelector('#primary, #primary.style-scope.ytd-watch-flexy');
-  if (primary && (primary.style.width === '100%' || primary.style.maxWidth === '100%')) {
-    restoreOriginalVideoWidth();
-  }
+  // Restore original video width
+  restoreOriginalVideoWidth();
   
-  if (primary) {
-    primary.style.maxWidth = '';
-    primary.style.width = '';
-    primary.style.marginTop = '';
-  }
-  
-  const fullscreenGrid = document.querySelector('.ytp-fullscreen-grid-stills-container');
-  if (fullscreenGrid) {
-    fullscreenGrid.style.display = '';
-  }
-  
+  // Reset stored display
   feedOriginalDisplay = null;
+  
+  // Trigger resize
+  if (resizeTimeout) clearTimeout(resizeTimeout);
+  resizeTimeout = setTimeout(() => {
+    window.dispatchEvent(new Event('resize'));
+  }, 50);
 }
 
 // ============ COMMENTS HANDLING ============
@@ -405,38 +496,46 @@ function startObservers() {
   let lastUrl = location.href;
   let urlChangeTimer = null;
   
-  // Only check URL changes, not every DOM mutation
-  new MutationObserver(() => {
+  // Watch for URL changes (SPA navigation)
+  const urlObserver = new MutationObserver(() => {
     const url = location.href;
     if (url !== lastUrl && url.includes('youtube.com')) {
+      console.log("URL changed from", lastUrl, "to", url);
       lastUrl = url;
       if (urlChangeTimer) clearTimeout(urlChangeTimer);
       urlChangeTimer = setTimeout(() => {
-        feedOriginalDisplay = null;
+        feedOriginalDisplay = null; // Reset feed display cache
         applyAllFeatures();
-      }, 200);
+      }, 300);
     }
-  }).observe(document, { subtree: true, childList: true });
+  });
+  urlObserver.observe(document, { subtree: true, childList: true });
   
+  // YouTube's custom navigation event
   document.addEventListener('yt-navigate-finish', () => {
+    console.log("yt-navigate-finish event fired");
     if (urlChangeTimer) clearTimeout(urlChangeTimer);
     urlChangeTimer = setTimeout(() => {
       feedOriginalDisplay = null;
       applyAllFeatures();
-    }, 200);
+    }, 300);
   });
   
-  // Only observe for feed/comments when needed - not constantly
+  // Watch for dynamic content changes (but not too aggressive)
   let mutationTimer = null;
-  const observer = new MutationObserver(() => {
+  const contentObserver = new MutationObserver(() => {
     if (mutationTimer) clearTimeout(mutationTimer);
     mutationTimer = setTimeout(() => {
-      if (document.querySelector("#secondary") || document.querySelector("#comments") || document.querySelector("video")) {
-        applyAllFeatures();
+      // Only reapply if we're on a YouTube page
+      if (window.location.href.includes('youtube.com')) {
+        // Check if feed or video elements exist
+        if (document.querySelector("#secondary") || document.querySelector("#comments") || document.querySelector("video")) {
+          applyAllFeatures();
+        }
       }
-    }, 150);
+    }, 200);
   });
-  observer.observe(document.body, { childList: true, subtree: true });
+  contentObserver.observe(document.body, { childList: true, subtree: true });
 }
 
 // ============ INITIALIZE ============
