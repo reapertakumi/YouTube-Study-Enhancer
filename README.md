@@ -1,64 +1,77 @@
-# YouTube Study Enhancer
+# Changelog
 
-> Transform your browser into a focused study environment — block distractions, enhance YouTube, and immerse yourself with ambient soundscapes.
+## Version 0.3.6 - Major Update (2024)
 
----
+### 🎯 Core Changes
 
-## Features
+#### New Blocker Page System
+- **Complete rewrite**: Switched from script injection to direct redirection system
+- **New UI design**: Completely redesigned blocker page with modern aesthetics
+- **Performance boost**: Eliminated injection overhead, resulting in faster page loads
+- **Better reliability**: Redirection system works more consistently across all sites
 
-### Site Blocker
-Block distracting websites with a single click — YouTube, Instagram, X (Twitter), TikTok, Reddit, Pinterest, or any custom domain you add.
+#### Enhanced Visual Experience
+- **Wave text animation**: New traveling wave animation for "Study Mode" title
+- **4 animation speeds**: Added speed controls (None, Slow, Medium, Fast) for text animation
+- **Dual light system**: Main light + secondary light with customizable colors
+- **3 movement types**: Static, Smooth Bounce, and Orbit Dance for secondary light
+- **Position presets**: Center, Top-Left, Top-Right, Bottom-Left, Bottom-Right for main light
+- **Dynamic animations**: Smooth pulse and drift animations with adjustable speeds
 
-### YouTube Enhancement
-- **Block 2x Speed** — Forces normal playback speed
-- **Hide Video Feed** — Remove or hide the sidebar recommendations
-- **Hide Comments** — Eliminate comment section distractions
-- **Block Shorts** — Remove YouTube Shorts from your feed
+#### New Features
 
-### Immersive Study Mode
-When a blocked site is detected, you're greeted with a focus overlay featuring:
-- **Ambient background music** — Curated dark ambient soundscapes
-- **Dynamic spotlight effects** — Customizable colors and movement
-- **Music controls** — Play, pause, skip tracks, and volume adjustment
+**Pomodoro Timer** 🍅
+- Built-in focus timer with customizable focus/break durations
+- Visual phase indicator (Focus Time / Break Time)
+- Local sound notifications when timer completes
+- Draggable interface that remembers position
+- Start, Pause, and Reset controls
 
-### Personalization
-- **Light and Dark themes** — Toggle between both modes
-- **Preset moods** — Calm, Focus, Energy, Deep, Warm, Night
-- **Customizable spotlights** — Choose colors, number of lights, and movement speed
+**Sticky Notes / To-Do List** 📝
+- Persistent to-do list that saves to localStorage
+- Double-click to edit any task
+- Add, complete, and delete individual tasks
+- Clear all tasks with confirmation
+- Draggable window that remembers position
+- Animated slide-in for new tasks
 
----
+**Ambient Sound Mixer** 🌿
+- 6 ambient sound channels: Fireplace, Wind, Birds & Nature, Rain, Thunder, Ocean Waves
+- Individual volume controls for each sound
+- Master volume control
+- Persistent settings (saves on/off states and volumes)
+- Local audio files for offline use
 
-## Installation
+**Music Player** 🎵
+- LoFi study music playlist (13 tracks)
+- Play/Pause, Previous, Next controls
+- Volume slider with real-time adjustment
+- Progress bar with seeking functionality
+- Now playing display showing artist and song
 
-[![Chrome Web Store](https://img.shields.io/badge/Chrome-Web%20Store-4285F4?logo=googlechrome)](https://chromewebstore.google.com/detail/youtube-study-enhancer/pamglonmkhcpoilnohgaoghgfnjjmjne?authuser=0)
+#### Popup Enhancements
 
-Install directly from the Chrome Web Store, or load unpacked from source:
+**Block Sites Management**
+- Removable default sites (Instagram, Twitter, TikTok, Pinterest, Reddit)
+- New "X" delete button that appears on hover over cards
+- Proper animation when removing sites
+- Persistence of removed sites across sessions
 
-1. Clone this repository
-2. Navigate to `chrome://extensions/`
-3. Enable Developer mode
-4. Click Load unpacked and select the extension folder
+**Settings Panel**
+- New tabbed interface: General, YouTube, Blocker Page
+- Reset to Default button - restores all factory settings
+- Theme presets: Default, Sunset, Ocean, Forest, Midnight, Coffee, Cyberpunk, Aurora, Sakura
+- Font selector with 10 font options
+- New Tab Page toggle (Focus Page vs Chrome Default)
 
----
+**YouTube Features**
+- Video Feed Mode: Remove (hides feed, expands video) or Hide (hides feed, keeps video size)
+- Block 2x Speed toggle
+- Hide Video Feed toggle
+- Hide Comments toggle
 
-## Usage
-
-Click the extension icon in your toolbar to open the popup. Toggle features on or off, add custom domains to block, and adjust your study environment.
-
-The study overlay activates automatically when you visit a blocked site — complete with ambient music and dynamic visuals to help you stay focused.
-
----
-
-## Development
-
-```bash
-git clone https://github.com/reapertakumi/YouTube-Study-Enhancer.git
-```
-
-Load the unpacked extension in Chrome. No build step required — pure JavaScript.
-
----
-
-## License
-
-MIT © reapertakumi
+**Lock System**
+- Password protection for settings
+- First-time password setup flow
+- Change password functionality
+- Visual lock/unlock indicators
