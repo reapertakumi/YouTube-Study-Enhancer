@@ -3,28 +3,28 @@
   "lastUpdated": "2026-05-02",
   "files": {
     "music": [
-      { "fileName": "fassounds-good-night-lofi-cozy-chill-music-160166.opus", "hash": "", "sizeKB": 0 },
-      { "fileName": "fassounds-lofi-study-calm-peaceful-chill-hop-112191.opus", "hash": "", "sizeKB": 0 },
-      { "fileName": "lofidreams-cozy-lofi-background-music-457199.opus", "hash": "", "sizeKB": 0 },
-      { "fileName": "lofidreams-lofi-jazz-music-485312.opus", "hash": "", "sizeKB": 0 },
-      { "fileName": "lofi_music_library-coffee-lofi-chill-lofi-ambient-458901.opus", "hash": "", "sizeKB": 0 },
-      { "fileName": "lofi_music_library-lofi-girl-chill-lofi-beats-lofi-ambient-461871.opus", "hash": "", "sizeKB": 0 },
-      { "fileName": "lofi_music_library-lofi-rain-lofi-music-458077.opus", "hash": "", "sizeKB": 0 },
-      { "fileName": "mondamusic-lofi-chill-chill-512854.opus", "hash": "", "sizeKB": 0 },
-      { "fileName": "mondamusic-lofi-lofi-chill-lofi-girl-491690.opus", "hash": "", "sizeKB": 0 },
-      { "fileName": "mondamusic-lofi-lofi-girl-lofi-chill-512853.opus", "hash": "", "sizeKB": 0 },
-      { "fileName": "sonican-lo-fi-music-loop-sentimental-jazzy-love-473154.opus", "hash": "", "sizeKB": 0 },
-      { "fileName": "watermello-lofi-chill-lofi-girl-lofi-488388.opus", "hash": "", "sizeKB": 0 },
-      { "fileName": "watermello-lofi-lofi-girl-lofi-chill-484610.opus", "hash": "", "sizeKB": 0 }
+      { "fileName": "fassounds-good-night-lofi-cozy-chill-music-160166.opus", "hash": "d29af0e50680a30fcd49c6c9f7892fbbf66c53d9b1903850d6ac200414754ce6", "sizeKB": 2050 },
+      { "fileName": "fassounds-lofi-study-calm-peaceful-chill-hop-112191.opus", "hash": "07cc8b3f7c672885278198622e61c8d7aca430f492ae179c7d676a6e8fb7a23d", "sizeKB": 1850 },
+      { "fileName": "lofidreams-cozy-lofi-background-music-457199.opus", "hash": "1ec91998c3018a5b26fdb952037fa5301e86463752c41acff4c5f157f08ec6f7", "sizeKB": 2340 },
+      { "fileName": "lofidreams-lofi-jazz-music-485312.opus", "hash": "dc9f7356eee13a4add3472f1f1b8e9a4365cba2aa9e6fc7eb30c88654d25c344", "sizeKB": 2290 },
+      { "fileName": "lofi_music_library-coffee-lofi-chill-lofi-ambient-458901.opus", "hash": "d390c41b318169f6c18f3fbfa1855ff215d4c681fe716a5868b0fc3ef684d235", "sizeKB": 2334 },
+      { "fileName": "lofi_music_library-lofi-girl-chill-lofi-beats-lofi-ambient-461871.opus", "hash": "ce35068b995aab34498f9704f57b429714f9dc929b3dfbe8254b124a92829d6e", "sizeKB": 1480 },
+      { "fileName": "lofi_music_library-lofi-rain-lofi-music-458077.opus", "hash": "fd5fd1340007d733cc8c838da98fedd6892524c20df3d6297822f2bda94187e2", "sizeKB": 2290 },
+      { "fileName": "mondamusic-lofi-chill-chill-512854.opus", "hash": "042fb88ef529045866d0628d33a74f534765aaecbaafb24a15a91cfce658989e", "sizeKB": 1480 },
+      { "fileName": "mondamusic-lofi-lofi-chill-lofi-girl-491690.opus", "hash": "ce6213da835ff2a7a0b42785743beac134b9354881f6785fa16b9788b18d7cb8", "sizeKB": 1610 },
+      { "fileName": "mondamusic-lofi-lofi-girl-lofi-chill-512853.opus", "hash": "c214c069dfab5eaa8ed5c071af262c64c136e5c0dc6750227fa811cc30770d35", "sizeKB": 1320 },
+      { "fileName": "sonican-lo-fi-music-loop-sentimental-jazzy-love-473154.opus", "hash": "8096f3812615d3518ee588be223be1aa2f94f42d833956f62c7c92334eee1afe", "sizeKB": 1290 },
+      { "fileName": "watermello-lofi-chill-lofi-girl-lofi-488388.opus", "hash": "1dd81dcea78444dec1a0737f05ddd39868ded2eeefa434d81fa6daa35234e903", "sizeKB": 1560 },
+      { "fileName": "watermello-lofi-lofi-girl-lofi-chill-484610.opus", "hash": "4569ec61b848c84683f9b07d1b79424dca94408d2d481ad2bc4c099169c21583", "sizeKB": 1480 }
     ],
     "sounds": [
-      { "fileName": "fireplace.opus", "hash": "", "sizeKB": 0 },
-      { "fileName": "wind.opus", "hash": "", "sizeKB": 0 },
-      { "fileName": "bird.opus", "hash": "", "sizeKB": 0 },
-      { "fileName": "rain.opus", "hash": "", "sizeKB": 0 },
-      { "fileName": "thunder.opus", "hash": "", "sizeKB": 0 },
-      { "fileName": "ocean.opus", "hash": "", "sizeKB": 0 },
-      { "fileName": "break.opus", "hash": "", "sizeKB": 0 }
+      { "fileName": "fireplace.opus", "hash": "dd4ac39ee043370a0da2e57a5c4d443dd169db5334fbfbe6bd2959d3d9efd105", "sizeKB": 5310 },
+      { "fileName": "wind.opus", "hash": "04f86f59e89410b0072e944d22cb172270c3f0691de40ab2a76de7371c16e751", "sizeKB": 610 },
+      { "fileName": "bird.opus", "hash": "826a7ed483f71b1e5c58e5f58338bf44ba39d4430810a513eb8c3d3d2e69feba", "sizeKB": 10300 },
+      { "fileName": "rain.opus", "hash": "28bd11912c8bcb75152a1970c03ac25bc20aa26d0836b37e00cb3223ed595430", "sizeKB": 1360 },
+      { "fileName": "thunder.opus", "hash": "76491efe061d50a8dd40552132ac3f3111b5f5ec97c2df5776661484ca2c85ad", "sizeKB": 784 },
+      { "fileName": "ocean.opus", "hash": "e40034dc6a7672163b7208ddea97ad3f60c31470a57e065255703d7b54e012d0", "sizeKB": 991 },
+      { "fileName": "break.opus", "hash": "ba5caba0dc2d800eacfdde9270ece15e2e2a8aba0a8d1eebc3eaa0bd39419f56", "sizeKB": 154 }
     ]
   }
 }
