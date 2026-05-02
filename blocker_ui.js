@@ -18,6 +18,9 @@
     sounds: []
   };
   
+  // Custom user-added music
+  let customPlaylist = [];
+  
   // Open IndexedDB
   function openDatabase() {
     return new Promise((resolve, reject) => {
@@ -55,6 +58,18 @@
         timestamp: Date.now(),
         ...metadata
       });
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  }
+  
+  // Delete file from IndexedDB
+  async function deleteFromIndexedDB(fileName) {
+    await openDatabase();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction([STORE_NAME], 'readwrite');
+      const store = transaction.objectStore(STORE_NAME);
+      const request = store.delete(fileName);
       request.onsuccess = () => resolve();
       request.onerror = () => reject(request.error);
     });
@@ -129,14 +144,16 @@
       name: file.fileName,
       url: `${GITHUB_BASE}/music/${file.fileName}`,
       sizeKB: file.sizeKB || 0,
-      hash: file.hash || ''
+      hash: file.hash || '',
+      isCustom: false
     }));
     
     const soundFiles = manifest.files.sounds.map(file => ({
       name: file.fileName,
       url: `${GITHUB_BASE}/sounds/${file.fileName}`,
       sizeKB: file.sizeKB || 0,
-      hash: file.hash || ''
+      hash: file.hash || '',
+      isCustom: false
     }));
     
     console.log('Built audio files from manifest:');
@@ -302,30 +319,25 @@
   async function checkForUpdates() {
     console.log('Checking for updates');
     
-    // Get remote manifest
     const remote = await fetchRemoteManifest();
     if (!remote) {
       console.log('Could not fetch remote manifest');
       return { hasUpdates: false, error: 'Cannot check for updates' };
     }
     
-    // Get local version from localStorage
     const localVersion = localStorage.getItem('audioLibraryVersion');
     
     console.log('Local version:', localVersion);
     console.log('Remote version:', remote.version);
     
-    // If no local version, this is first time user
     if (!localVersion) {
       console.log('No local version found - first time user');
       return { hasUpdates: false, firstTime: true };
     }
     
-    // Compare versions
     if (remote.version !== localVersion) {
       console.log(`Update available: ${localVersion} → ${remote.version}`);
       
-      // Update currentAudioFiles with new manifest
       const updatedFiles = buildAudioFilesFromManifest(remote);
       if (updatedFiles) {
         currentAudioFiles = updatedFiles;
@@ -344,21 +356,98 @@
     return { hasUpdates: false, currentVersion: remote.version };
   }
   
-  // Show update notification popup (EXACT same style as download popup with emojis)
+  // SVG Icon Helpers
+  function getDownloadIcon() {
+    return `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 48px; height: 48px; margin-bottom: 16px;">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+    </svg>`;
+  }
+  
+  function getCheckmarkIcon() {
+    return `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 48px; height: 48px; margin-bottom: 16px;">
+      <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+    </svg>`;
+  }
+  
+  function getWarningIcon() {
+    return `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 48px; height: 48px; margin-bottom: 16px;">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
+    </svg>`;
+  }
+  
+  function getEyeOpenIcon() {
+    return `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
+      <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+    </svg>`;
+  }
+  
+  function getEyeClosedIcon() {
+    return `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M3.98 8.223A10.477 10.477 0 0 0 1.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.451 10.451 0 0 1 12 4.5c4.756 0 8.773 3.162 10.065 7.498a10.522 10.522 0 0 1-4.293 5.774M6.228 6.228 3 3m3.228 3.228 3.65 3.65m7.894 7.894L21 21m-3.228-3.228-3.65-3.65m0 0a3 3 0 1 0-4.243-4.243m4.242 4.242L9.88 9.88" />
+    </svg>`;
+  }
+  
+  function getLibraryIcon() {
+    return `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 22px; height: 22px;">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 6.75h12M8.25 12h12m-12 5.25h12M3.75 6.75h.007v.008H3.75V6.75Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0ZM3.75 12h.007v.008H3.75V12Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm-.375 5.25h.007v.008H3.75v-.008Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
+    </svg>`;
+  }
+  
+  function getAddIcon() {
+    return `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 18px; height: 18px;">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+    </svg>`;
+  }
+  
+  function getDeleteIcon() {
+    return `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 18px; height: 18px;">
+      <path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+    </svg>`;
+  }
+  
+  // Custom Confirm Popup
+  function showCustomConfirm(message, onConfirm) {
+    const confirmDiv = document.createElement('div');
+    confirmDiv.className = 'custom-confirm';
+    confirmDiv.innerHTML = `
+      <div class="confirm-box">
+        <div class="confirm-message">${message}</div>
+        <div class="confirm-buttons">
+          <button class="confirm-btn yes">Yes</button>
+          <button class="confirm-btn no">Cancel</button>
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(confirmDiv);
+    
+    const yesBtn = confirmDiv.querySelector('.yes');
+    const noBtn = confirmDiv.querySelector('.no');
+    
+    yesBtn.addEventListener('click', () => {
+      onConfirm();
+      confirmDiv.remove();
+    });
+    
+    noBtn.addEventListener('click', () => {
+      confirmDiv.remove();
+    });
+  }
+  
+  // Show update notification popup
   async function showUpdateNotification() {
     const updateInfo = await checkForUpdates();
     
     if (updateInfo.hasUpdates && updateInfo.newVersion) {
       console.log('Showing update notification for version', updateInfo.newVersion);
       
-      // Remove any existing notification
       const existingNotification = document.getElementById('updateNotification');
       if (existingNotification) existingNotification.remove();
       
       const totalFiles = currentAudioFiles.music.length + currentAudioFiles.sounds.length;
       const totalSizeMB = updateInfo.totalSizeMB || getTotalSizeMB();
       
-      // Create notification popup - EXACT same style as download popup
       const notification = document.createElement('div');
       notification.id = 'updateNotification';
       notification.style.cssText = `
@@ -380,7 +469,7 @@
       `;
       
       notification.innerHTML = `
-        <div style="font-size: 48px; margin-bottom: 16px;">📥</div>
+        ${getDownloadIcon()}
         <div style="font-size: 1.2rem; font-weight: 600; margin-bottom: 8px; color: #c084fc;">Update Available</div>
         <div style="font-size: 0.85rem; opacity: 0.7; margin-bottom: 20px; line-height: 1.4;">
           A new version of the audio library is available.<br>
@@ -436,7 +525,6 @@
         noBtn.style.opacity = '0.6';
         progressArea.style.display = 'block';
         
-        // Clear old version to force re-download of updated files
         localStorage.removeItem('audioLibraryVersion');
         
         await downloadAllFiles(
@@ -457,7 +545,7 @@
           },
           async (completed, total) => {
             notification.innerHTML = `
-              <div style="font-size: 48px; margin-bottom: 16px;">✅</div>
+              ${getCheckmarkIcon()}
               <div style="font-size: 1.2rem; font-weight: 600; margin-bottom: 8px; color: #4ade80;">Update Complete</div>
               <div style="font-size: 0.85rem; opacity: 0.7; margin-bottom: 20px;">
                 Successfully updated to version ${updateInfo.newVersion}<br>
@@ -483,7 +571,7 @@
           },
           (error) => {
             notification.innerHTML = `
-              <div style="font-size: 48px; margin-bottom: 16px;">⚠️</div>
+              ${getWarningIcon()}
               <div style="font-size: 1.2rem; font-weight: 600; margin-bottom: 8px; color: #ff6b6b;">Update Failed</div>
               <div style="font-size: 0.85rem; opacity: 0.7; margin-bottom: 20px;">
                 ${error}<br><br>
@@ -562,7 +650,7 @@
     `;
     
     popupElement.innerHTML = `
-      <div style="font-size: 48px; margin-bottom: 16px;">🎵</div>
+      ${getDownloadIcon()}
       <div style="font-size: 1.2rem; font-weight: 600; margin-bottom: 8px; color: #c084fc;">Download Audio Library</div>
       <div style="font-size: 0.85rem; opacity: 0.7; margin-bottom: 20px; line-height: 1.4;">
         This feature requires ${totalFiles} audio files (${totalSizeMB} MB).<br>
@@ -635,7 +723,7 @@
         },
         async (completed, total) => {
           popupElement.innerHTML = `
-            <div style="font-size: 48px; margin-bottom: 16px;">✅</div>
+            ${getCheckmarkIcon()}
             <div style="font-size: 1.2rem; font-weight: 600; margin-bottom: 8px; color: #4ade80;">Download Complete</div>
             <div style="font-size: 0.85rem; opacity: 0.7; margin-bottom: 20px;">
               Successfully downloaded ${completed}/${total} audio files (${getTotalSizeMB()} MB).
@@ -665,7 +753,7 @@
         },
         (error) => {
           popupElement.innerHTML = `
-            <div style="font-size: 48px; margin-bottom: 16px;">⚠️</div>
+            ${getWarningIcon()}
             <div style="font-size: 1.2rem; font-weight: 600; margin-bottom: 8px; color: #ff6b6b;">Download Failed</div>
             <div style="font-size: 0.85rem; opacity: 0.7; margin-bottom: 20px;">
               ${error}<br><br>
@@ -704,7 +792,6 @@
   async function withAudioCheck(callback) {
     console.log('withAudioCheck called - currentAudioFiles has', currentAudioFiles.music.length, 'music files');
     
-    // If no files loaded yet, try to load manifest
     if (currentAudioFiles.music.length === 0) {
       const manifest = await fetchRemoteManifest();
       if (manifest) {
@@ -726,7 +813,7 @@
     }
   }
 
-  // ===== REST OF UI CODE =====
+  // ===== UI COMPONENTS =====
   
   // 30 unique emoji variants for the center icon
   const icons = [
@@ -785,12 +872,14 @@
     secondLight: false,
     mainColor: "rgb(168, 85, 247)",
     secondColor: "rgb(196, 181, 253)",
-    movement: "none",
+    movement: "orbit",        // Default: Orbit Dance
     speed: 20,
     mainPosition: "center",
     textAnimationSpeed: "none",
     mainLightSize: 400,
-    secondLightSize: 800
+    secondLightSize: 400,     // Changed from 800 to 400 (50% of max)
+    mainLightCustomTop: null,
+    mainLightCustomLeft: null
   };
 
   function updateTextAnimationSpeed() {
@@ -866,10 +955,25 @@
   }
 
   function setMainPositionUI() {
-    const pos = mainPositions[state.mainPosition] || mainPositions.center;
-    mainLight.style.top = pos.top;
-    mainLight.style.left = pos.left;
-    mainLight.style.transform = pos.transform;
+    if (state.mainPosition === 'custom') {
+      if (state.mainLightCustomTop && state.mainLightCustomLeft) {
+        mainLight.style.top = state.mainLightCustomTop;
+        mainLight.style.left = state.mainLightCustomLeft;
+        mainLight.style.transform = 'none';
+      } else {
+        const pos = mainPositions.center;
+        mainLight.style.top = pos.top;
+        mainLight.style.left = pos.left;
+        mainLight.style.transform = pos.transform;
+      }
+    } else {
+      const pos = mainPositions[state.mainPosition] || mainPositions.center;
+      mainLight.style.top = pos.top;
+      mainLight.style.left = pos.left;
+      mainLight.style.transform = pos.transform;
+      state.mainLightCustomTop = null;
+      state.mainLightCustomLeft = null;
+    }
   }
 
   function updateLightSizes() {
@@ -976,7 +1080,9 @@
       mainPosition: state.mainPosition,
       textAnimationSpeed: state.textAnimationSpeed,
       mainLightSize: state.mainLightSize,
-      secondLightSize: state.secondLightSize
+      secondLightSize: state.secondLightSize,
+      mainLightCustomTop: state.mainLightCustomTop,
+      mainLightCustomLeft: state.mainLightCustomLeft
     };
     localStorage.setItem("studyMode", JSON.stringify(toStore));
   }
@@ -992,7 +1098,19 @@
           state.mainLightSize = 400;
         }
         if (typeof state.secondLightSize !== 'number' || state.secondLightSize < 200 || state.secondLightSize > 800) {
-          state.secondLightSize = 800;
+          state.secondLightSize = 400;  // Changed from 800 to 400
+        }
+        
+        // Ensure movement defaults to orbit if not present or invalid
+        if (!state.movement || (state.movement !== "orbit" && state.movement !== "bounce" && state.movement !== "none")) {
+          state.movement = "orbit";
+        }
+        
+        // Restore custom positioning for main light
+        if (state.mainPosition === 'custom' && state.mainLightCustomTop && state.mainLightCustomLeft) {
+          mainLight.style.top = state.mainLightCustomTop;
+          mainLight.style.left = state.mainLightCustomLeft;
+          mainLight.style.transform = 'none';
         }
       } catch(e) {
         console.error("Error loading settings:", e);
@@ -1041,6 +1159,11 @@
         else if (speedSlow.classList.contains('active')) state.textAnimationSpeed = 'slow';
         else if (speedMedium.classList.contains('active')) state.textAnimationSpeed = 'medium';
         else if (speedFast.classList.contains('active')) state.textAnimationSpeed = 'fast';
+        
+        if (state.mainPosition !== 'custom') {
+          state.mainLightCustomTop = null;
+          state.mainLightCustomLeft = null;
+        }
         
         saveToLocal();
         fullRender();
@@ -1143,6 +1266,11 @@
     if (mainLightSizeSlider) state.mainLightSize = Number(mainLightSizeSlider.value);
     if (secondLightSizeSlider) state.secondLightSize = Number(secondLightSizeSlider.value);
     
+    if (state.mainPosition !== 'custom') {
+      state.mainLightCustomTop = null;
+      state.mainLightCustomLeft = null;
+    }
+    
     saveToLocal();
     fullRender();
     settingsDiv.classList.add("hidden");
@@ -1182,6 +1310,69 @@
   currentCornerIdx = 0;
   if (state.movement === "none" && state.secondLight) applySecondLightBehavior();
 
+  // ===== MAIN LIGHT DRAGGABLE (for custom position) =====
+  let isMainLightDragging = false;
+  let mainLightDragStartX, mainLightDragStartY;
+
+  function makeMainLightDraggable() {
+    if (!mainLight) return;
+    
+    mainLight.style.cursor = 'grab';
+    mainLight.style.userSelect = 'none';
+    
+    mainLight.addEventListener('mousedown', (e) => {
+      if (state.mainPosition !== 'custom') return;
+      if (e.target.closest('.settings-toggle, .action-btn, .control-btn, .eye-toggle')) return;
+      
+      isMainLightDragging = true;
+      mainLight.style.cursor = 'grabbing';
+      mainLight.style.transition = 'none';
+      
+      const rect = mainLight.getBoundingClientRect();
+      mainLightDragStartX = e.clientX - rect.left;
+      mainLightDragStartY = e.clientY - rect.top;
+      
+      mainLight.style.position = 'fixed';
+      mainLight.style.top = rect.top + 'px';
+      mainLight.style.left = rect.left + 'px';
+      mainLight.style.transform = 'none';
+      
+      e.preventDefault();
+    });
+    
+    document.addEventListener('mousemove', (e) => {
+      if (!isMainLightDragging) return;
+      
+      let newTop = e.clientY - mainLightDragStartY;
+      let newLeft = e.clientX - mainLightDragStartX;
+      
+      const lightSize = state.mainLightSize;
+      newTop = Math.max(0, Math.min(window.innerHeight - lightSize, newTop));
+      newLeft = Math.max(0, Math.min(window.innerWidth - lightSize, newLeft));
+      
+      mainLight.style.top = newTop + 'px';
+      mainLight.style.left = newLeft + 'px';
+    });
+    
+    document.addEventListener('mouseup', () => {
+      if (isMainLightDragging) {
+        isMainLightDragging = false;
+        mainLight.style.cursor = 'grab';
+        mainLight.style.transition = '';
+        
+        state.mainLightCustomTop = mainLight.style.top;
+        state.mainLightCustomLeft = mainLight.style.left;
+        saveToLocal();
+        
+        mainLight.style.animation = 'none';
+        mainLight.offsetHeight;
+        mainLight.style.animation = '';
+      }
+    });
+  }
+
+  makeMainLightDraggable();
+
   // ===== MUSIC PLAYER =====
   let playlist = [];
   let currentTrack = 0;
@@ -1200,29 +1391,118 @@
   const artistNameSpan = document.getElementById('artistName');
   const songNameSpan = document.getElementById('songName');
 
-  function buildPlaylistFromManifest() {
-    playlist = currentAudioFiles.music.map(file => {
-      let artist = "Lofi Artist";
-      let song = file.name.replace(/\.opus$/, '').replace(/-/g, ' ');
+  // Load saved volume
+  const savedVolume = localStorage.getItem('musicVolume');
+  if (savedVolume !== null) {
+    audio.volume = parseFloat(savedVolume);
+    if (volumeSlider) volumeSlider.value = savedVolume * 100;
+  } else {
+    audio.volume = 0.7;
+    if (volumeSlider) volumeSlider.value = 70;
+  }
+
+  if (volumeSlider) {
+    volumeSlider.addEventListener('input', (e) => {
+      const vol = e.target.value / 100;
+      audio.volume = vol;
+      localStorage.setItem('musicVolume', vol);
+    });
+  }
+
+  function loadCustomMusic() {
+    const saved = localStorage.getItem('customPlaylist');
+    if (saved) {
+      try {
+        customPlaylist = JSON.parse(saved);
+        console.log('Loaded custom music:', customPlaylist.length, 'files');
+      } catch(e) {
+        console.error('Error loading custom music:', e);
+      }
+    }
+  }
+
+  function saveCustomMusic() {
+    localStorage.setItem('customPlaylist', JSON.stringify(customPlaylist));
+  }
+
+  async function deleteCustomAudioFile(customItem, index) {
+    showCustomConfirm(`Delete "${customItem.originalName || customItem.name}" from your library?`, async () => {
+      await deleteFromIndexedDB(customItem.name);
+      customPlaylist.splice(index, 1);
+      saveCustomMusic();
       
-      if (file.name.includes('fassounds')) artist = "fassounds";
-      else if (file.name.includes('lofidreams')) artist = "lofidreams";
-      else if (file.name.includes('lofi_music_library')) artist = "lofi_music_library";
-      else if (file.name.includes('mondamusic')) artist = "mondamusic";
-      else if (file.name.includes('sonican')) artist = "sonican";
-      else if (file.name.includes('watermello')) artist = "watermello";
+      const currentPlayingFile = playlist[currentTrack]?.file;
+      if (currentPlayingFile === customItem.name) {
+        if (playlist.length > 1) {
+          nextTrack();
+        } else {
+          audio.pause();
+          isPlaying = false;
+          playPauseBtn.textContent = '▶';
+          artistNameSpan.textContent = 'Audio Library';
+          songNameSpan.textContent = 'No songs available';
+        }
+      }
       
-      let cleanSong = song;
-      if (cleanSong.length > 40) cleanSong = cleanSong.substring(0, 37) + '...';
-      
-      return {
-        artist: artist,
-        song: cleanSong,
-        file: file.name
-      };
+      rebuildFullPlaylist();
+      if (libraryOpen) renderLibrary();
+    });
+  }
+
+  async function addCustomAudioFile(file) {
+    if (!file.type.startsWith('audio/')) {
+      alert('Please select an audio file (MP3, WAV, OGG, etc.)');
+      return false;
+    }
+    
+    const fileName = `custom_${Date.now()}_${file.name}`;
+    const blob = await file.arrayBuffer();
+    
+    await saveToIndexedDB(fileName, new Blob([blob], { type: file.type }), { 
+      sizeKB: Math.round(blob.byteLength / 1024),
+      isCustom: true,
+      originalName: file.name
     });
     
-    console.log('Built playlist with', playlist.length, 'tracks');
+    customPlaylist.push({
+      name: fileName,
+      originalName: file.name,
+      url: null,
+      sizeKB: Math.round(blob.byteLength / 1024),
+      isCustom: true
+    });
+    
+    saveCustomMusic();
+    return true;
+  }
+
+  function rebuildFullPlaylist() {
+    const manifestMusic = currentAudioFiles.music.map(file => ({
+      artist: file.name.includes('fassounds') ? 'fassounds' :
+              file.name.includes('lofidreams') ? 'lofidreams' :
+              file.name.includes('lofi_music_library') ? 'lofi_music_library' :
+              file.name.includes('mondamusic') ? 'mondamusic' :
+              file.name.includes('sonican') ? 'sonican' :
+              file.name.includes('watermello') ? 'watermello' : 'Lofi Artist',
+      song: file.name.replace(/\.opus$/, '').replace(/-/g, ' ').substring(0, 40),
+      file: file.name,
+      isCustom: false
+    }));
+    
+    const customMusic = customPlaylist.map(custom => ({
+      artist: 'My Music',
+      song: custom.originalName || custom.name.replace(/^custom_\d+_/, '').replace(/\.(opus|mp3|wav|ogg)$/, ''),
+      file: custom.name,
+      isCustom: true,
+      customIndex: customPlaylist.findIndex(c => c.name === custom.name)
+    }));
+    
+    playlist = [...manifestMusic, ...customMusic];
+    console.log('Full playlist rebuilt:', playlist.length, 'tracks');
+  }
+
+  function buildPlaylistFromManifest() {
+    rebuildFullPlaylist();
   }
 
   async function loadTrack(index) {
@@ -1232,7 +1512,15 @@
     artistNameSpan.textContent = track.artist;
     songNameSpan.textContent = track.song;
     
-    const audioUrl = await getAudioUrl(track.file);
+    let audioUrl = await getAudioUrl(track.file);
+    
+    if (!audioUrl && track.isCustom) {
+      const customFile = customPlaylist.find(c => c.name === track.file);
+      if (customFile && customFile.url) {
+        audioUrl = customFile.url;
+      }
+    }
+    
     if (audioUrl) {
       if (audioBlobUrls.has(track.file)) {
         URL.revokeObjectURL(audioBlobUrls.get(track.file));
@@ -1320,10 +1608,6 @@
     timeTotal.textContent = formatTime(audio.duration);
   });
 
-  volumeSlider.addEventListener('input', (e) => {
-    audio.volume = e.target.value / 100;
-  });
-
   playPauseBtn.addEventListener('click', () => {
     withAudioCheck(() => togglePlayPause());
   });
@@ -1339,8 +1623,6 @@
   progressBar.addEventListener('click', (e) => {
     withAudioCheck(() => seek(e));
   });
-
-  audio.volume = 0.7;
 
   // ===== AMBIENT SOUND MIXER =====
   const soundBtn = document.getElementById('soundBtn');
@@ -1916,7 +2198,7 @@
 
     function setupDefaultTodos() {
       const defaultTodos = [
-        { text: "Read a book", completed: false },
+        { text: "Read a book", completed: true },
         { text: "Complete project", completed: false },
         { text: "Take a break", completed: false }
       ];
@@ -2046,7 +2328,7 @@
     }
 
     function clearAllTodos() {
-      showConfirm('Are you sure you want to clear all todos?', () => {
+      showCustomConfirm('Are you sure you want to clear all todos?', () => {
         todoList.innerHTML = '';
         saveTodos();
       });
@@ -2063,36 +2345,241 @@
     loadTodos();
   }
 
-  function showConfirm(message, onConfirm) {
-    const confirmDiv = document.createElement('div');
-    confirmDiv.className = 'custom-confirm';
-    confirmDiv.innerHTML = `
-      <div class="confirm-box">
-        <div class="confirm-message">${message}</div>
-        <div class="confirm-buttons">
-          <button class="confirm-btn yes">Yes</button>
-          <button class="confirm-btn no">Cancel</button>
+  // ===== LIBRARY POPUP =====
+  const libraryBtn = document.getElementById('libraryBtn');
+  const libraryPopup = document.getElementById('libraryPopup');
+  const closeLibraryBtn = document.getElementById('closeLibraryBtn');
+  const libraryList = document.getElementById('libraryList');
+  const librarySearchInput = document.getElementById('librarySearchInput');
+  const libraryStats = document.getElementById('libraryStats');
+  
+  let libraryOpen = false;
+  let currentSearchTerm = '';
+  
+  // Create Add Music button if it doesn't exist
+  let addMusicBtn = document.getElementById('addMusicBtn');
+  if (!addMusicBtn && libraryPopup) {
+    const libraryHeader = document.querySelector('.library-header');
+    if (libraryHeader) {
+      let rightSideWrapper = document.querySelector('.library-header-right');
+      if (!rightSideWrapper) {
+        rightSideWrapper = document.createElement('div');
+        rightSideWrapper.className = 'library-header-right';
+        
+        addMusicBtn = document.createElement('button');
+        addMusicBtn.id = 'addMusicBtn';
+        addMusicBtn.className = 'add-music-btn';
+        addMusicBtn.title = 'Add your own music';
+        addMusicBtn.innerHTML = `${getAddIcon()} Add Music`;
+        
+        const existingCloseBtn = document.querySelector('.close-library-btn');
+        if (existingCloseBtn) {
+          existingCloseBtn.parentNode.removeChild(existingCloseBtn);
+          rightSideWrapper.appendChild(addMusicBtn);
+          rightSideWrapper.appendChild(existingCloseBtn);
+          libraryHeader.appendChild(rightSideWrapper);
+        }
+      }
+    }
+  }
+  
+  function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/[&<>]/g, function(m) {
+      if (m === '&') return '&amp;';
+      if (m === '<') return '&lt;';
+      if (m === '>') return '&gt;';
+      return m;
+    });
+  }
+  
+  function renderLibrary() {
+    if (!libraryList) return;
+    
+    let filteredSongs = [...playlist];
+    
+    if (currentSearchTerm) {
+      const searchLower = currentSearchTerm.toLowerCase();
+      filteredSongs = filteredSongs.filter(song => 
+        song.song.toLowerCase().includes(searchLower) || 
+        song.artist.toLowerCase().includes(searchLower)
+      );
+    }
+    
+    if (filteredSongs.length === 0) {
+      libraryList.innerHTML = `<div class="library-empty">🎵 No songs found</div>`;
+      if (libraryStats) libraryStats.textContent = `0 songs`;
+      return;
+    }
+    
+    libraryList.innerHTML = filteredSongs.map((song, idx) => {
+      const originalIndex = playlist.findIndex(s => s.file === song.file);
+      const isActive = originalIndex === currentTrack;
+      return `
+        <div class="library-song-item ${isActive ? 'active' : ''}" data-index="${originalIndex}" data-custom="${song.isCustom}" data-custom-index="${song.customIndex !== undefined ? song.customIndex : -1}">
+          <div class="library-song-info">
+            <div class="library-song-title">${escapeHtml(song.song)} ${song.isCustom ? '<span style="font-size: 0.6rem; opacity: 0.5; margin-left: 5px;">📁</span>' : ''}</div>
+            <div class="library-song-artist">${escapeHtml(song.artist)}</div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            ${isActive ? '<div class="library-song-playing">▶ Playing</div>' : ''}
+            ${song.isCustom ? `<button class="delete-song-btn" data-index="${originalIndex}" data-custom-index="${song.customIndex}" title="Delete song">${getDeleteIcon()}</button>` : ''}
+          </div>
         </div>
-      </div>
-    `;
+      `;
+    }).join('');
     
-    document.body.appendChild(confirmDiv);
+    if (libraryStats) libraryStats.textContent = `${filteredSongs.length} ${filteredSongs.length === 1 ? 'song' : 'songs'}`;
     
-    const yesBtn = confirmDiv.querySelector('.yes');
-    const noBtn = confirmDiv.querySelector('.no');
-    
-    yesBtn.addEventListener('click', () => {
-      onConfirm();
-      confirmDiv.remove();
+    document.querySelectorAll('.library-song-item').forEach(item => {
+      const index = parseInt(item.dataset.index);
+      if (!isNaN(index)) {
+        item.addEventListener('click', (e) => {
+          if (e.target.closest('.delete-song-btn')) return;
+          
+          if (index !== currentTrack) {
+            currentTrack = index;
+            loadTrack(currentTrack);
+          }
+          if (!isPlaying) {
+            audio.play().catch(e => console.log('Playback error:', e));
+            isPlaying = true;
+            playPauseBtn.textContent = '⏸';
+          }
+          libraryPopup.style.display = 'none';
+          libraryOpen = false;
+          renderLibrary();
+        });
+      }
     });
     
-    noBtn.addEventListener('click', () => {
-      confirmDiv.remove();
+    document.querySelectorAll('.delete-song-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const index = parseInt(btn.dataset.index);
+        const customIndex = parseInt(btn.dataset.customIndex);
+        if (!isNaN(index) && !isNaN(customIndex) && customIndex >= 0 && customPlaylist[customIndex]) {
+          await deleteCustomAudioFile(customPlaylist[customIndex], customIndex);
+          renderLibrary();
+        }
+      });
     });
+  }
+  
+  if (addMusicBtn) {
+    addMusicBtn.addEventListener('click', () => {
+      const fileInput = document.createElement('input');
+      fileInput.type = 'file';
+      fileInput.accept = 'audio/*';
+      fileInput.multiple = true;
+      
+      fileInput.addEventListener('change', async (e) => {
+        const files = Array.from(e.target.files);
+        if (files.length > 0) {
+          let added = 0;
+          for (const file of files) {
+            if (file.type.startsWith('audio/')) {
+              const success = await addCustomAudioFile(file);
+              if (success) added++;
+            }
+          }
+          showCustomConfirm(`Added ${added} audio file(s) to your library!`, () => {
+            rebuildFullPlaylist();
+            if (libraryOpen) renderLibrary();
+            if (playlist.length > 0 && currentTrack >= playlist.length) {
+              currentTrack = 0;
+              loadTrack(currentTrack);
+            }
+          });
+        }
+      });
+      
+      fileInput.click();
+    });
+  }
+  
+  if (libraryBtn) {
+    libraryBtn.innerHTML = getLibraryIcon();
+    
+    libraryBtn.addEventListener('click', () => {
+      if (libraryOpen) {
+        libraryPopup.style.display = 'none';
+        libraryOpen = false;
+      } else {
+        renderLibrary();
+        libraryPopup.style.display = 'block';
+        libraryOpen = true;
+        if (ambientPopup) ambientPopup.classList.remove('show');
+        if (toolPopup) toolPopup.classList.remove('show');
+        if (pomodoroPopup) pomodoroPopup.classList.remove('show');
+        ambientOpen = false;
+        toolPopupOpen = false;
+        pomodoroOpen = false;
+      }
+    });
+  }
+  
+  if (closeLibraryBtn) {
+    closeLibraryBtn.addEventListener('click', () => {
+      libraryPopup.style.display = 'none';
+      libraryOpen = false;
+    });
+  }
+  
+  if (librarySearchInput) {
+    librarySearchInput.addEventListener('input', (e) => {
+      currentSearchTerm = e.target.value;
+      renderLibrary();
+    });
+  }
+  
+  document.addEventListener('click', (e) => {
+    if (libraryOpen && libraryBtn && !libraryBtn.contains(e.target) && libraryPopup && !libraryPopup.contains(e.target)) {
+      libraryPopup.style.display = 'none';
+      libraryOpen = false;
+    }
+  });
+  
+  const originalLoadTrackForLibrary = loadTrack;
+  const wrappedLoadTrackForLibrary = async function(index) {
+    await originalLoadTrackForLibrary(index);
+    if (libraryOpen) {
+      renderLibrary();
+    }
+  };
+  loadTrack = wrappedLoadTrackForLibrary;
+  
+  // ===== EYE TOGGLE (UI HIDE/SHOW) =====
+  const eyeToggleBtn = document.getElementById('eyeToggleBtn');
+  let uiHidden = false;
+  
+  function toggleUI() {
+    uiHidden = !uiHidden;
+    if (uiHidden) {
+      document.body.classList.add('ui-hidden');
+      if (eyeToggleBtn) eyeToggleBtn.innerHTML = getEyeClosedIcon();
+      if (libraryPopup) libraryPopup.style.display = 'none';
+      if (ambientPopup) ambientPopup.classList.remove('show');
+      if (toolPopup) toolPopup.classList.remove('show');
+      if (pomodoroPopup) pomodoroPopup.classList.remove('show');
+      libraryOpen = false;
+      ambientOpen = false;
+      toolPopupOpen = false;
+      pomodoroOpen = false;
+    } else {
+      document.body.classList.remove('ui-hidden');
+      if (eyeToggleBtn) eyeToggleBtn.innerHTML = getEyeOpenIcon();
+    }
+  }
+  
+  if (eyeToggleBtn) {
+    eyeToggleBtn.innerHTML = getEyeOpenIcon();
+    eyeToggleBtn.addEventListener('click', toggleUI);
   }
 
   loadStickyPosition();
   initTodoList();
+  loadCustomMusic();
   
   stickyNoteContainer.style.display = 'none';
   stickyNoteVisible = false;
@@ -2101,23 +2588,21 @@
   async function initAudioPlayer() {
     console.log('Initializing audio player');
     
-    // Load manifest first
     const manifest = await fetchRemoteManifest();
     if (manifest) {
       const updatedFiles = buildAudioFilesFromManifest(manifest);
       if (updatedFiles) {
         currentAudioFiles = updatedFiles;
       }
-      buildPlaylistFromManifest();
+      rebuildFullPlaylist();
       
       const totalKB = getTotalSizeKB();
       console.log(`Total audio library size: ${totalKB} KB (${(totalKB / 1024).toFixed(1)} MB)`);
       
-      // Check for updates on every page load
       await showUpdateNotification();
     } else {
       console.warn('Could not load manifest, using empty playlist');
-      buildPlaylistFromManifest();
+      rebuildFullPlaylist();
     }
     
     const hasAudio = await isAudioDownloaded();
@@ -2147,6 +2632,5 @@
     playPauseBtn.textContent = '▶';
   }
   
-  // Start the app
   initAudioPlayer();
 })();

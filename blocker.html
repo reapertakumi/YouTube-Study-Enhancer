@@ -63,6 +63,11 @@
     <button id="prevBtn" class="control-btn" title="Previous">⏮</button>
     <button id="playPauseBtn" class="control-btn" title="Play/Pause">▶</button>
     <button id="nextBtn" class="control-btn" title="Next">⏭</button>
+    <button id="libraryBtn" class="control-btn" title="Library">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 22px; height: 22px;">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 6.75h12M8.25 12h12m-12 5.25h12M3.75 6.75h.007v.008H3.75V6.75Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0ZM3.75 12h.007v.008H3.75V12Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm-.375 5.25h.007v.008H3.75v-.008Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
+      </svg>
+    </button>
     <div class="volume-slider-container">
       <span class="volume-icon">🔊</span>
       <input type="range" id="volumeSlider" class="volume-slider" min="0" max="100" value="70">
@@ -76,6 +81,33 @@
     <span class="time-total" id="timeTotal">0:00</span>
   </div>
 </div>
+
+<!-- Library Popup -->
+<div id="libraryPopup" class="library-popup" style="display: none;">
+  <div class="library-panel">
+    <div class="library-header">
+      <div class="library-title">
+        <span>📋</span> Music Library
+      </div>
+      <button class="close-library-btn" id="closeLibraryBtn">✕</button>
+    </div>
+    <div class="library-search">
+      <input type="text" id="librarySearchInput" placeholder="Search songs..." class="library-search-input">
+    </div>
+    <div class="library-list" id="libraryList"></div>
+    <div class="library-footer">
+      <div class="library-stats" id="libraryStats">0 songs</div>
+    </div>
+  </div>
+</div>
+
+<!-- Eye Toggle Button -->
+<button id="eyeToggleBtn" class="eye-toggle" title="Toggle UI Visibility">
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+    <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
+    <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+  </svg>
+</button>
 
 <!-- Bottom Left Action Buttons -->
 <div class="action-buttons">
@@ -117,7 +149,11 @@
     <div class="pomodoro-buttons">
       <button id="pomodoroStartBtn" class="pomodoro-btn primary">▶ Start</button>
       <button id="pomodoroPauseBtn" class="pomodoro-btn">⏸ Pause</button>
-      <button id="pomodoroResetBtn" class="pomodoro-btn">🔄 Reset</button>
+      <button id="pomodoroResetBtn" class="pomodoro-btn">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 16px; height: 16px;">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+        </svg>
+      </button>
     </div>
   </div>
 </div>
@@ -268,8 +304,8 @@
 
       <div class="light-size-slider">
         <label>Secondary Light Size</label>
-        <input type="range" id="secondLightSize" min="200" max="800" value="800">
-        <div class="size-value" id="secondLightSizeValue">100%</div>
+        <input type="range" id="secondLightSize" min="200" max="800" value="400">
+        <div class="size-value" id="secondLightSizeValue">50%</div>
       </div>
 
       <div class="movement-row">
@@ -297,6 +333,7 @@
     <button id="applyBtn" type="button">Apply &amp; Save</button>
   </div>
 </div>
+
 <script src="blocker_ui.js"></script>
 </body>
 </html>

@@ -53,6 +53,7 @@ body {
   position: absolute;
   inset: 0;
   z-index: 1;
+  pointer-events: none;
 }
 
 .light {
@@ -102,7 +103,6 @@ body {
   100% { transform: translate(-50%, -50%) rotate(360deg) translateX(260px) rotate(-360deg); }
 }
 
-/* CORRECTED WAVE - simple up and back to middle, continuous */
 @keyframes waveTravel {
   0%, 100% {
     transform: translateY(0px);
@@ -110,6 +110,61 @@ body {
   50% {
     transform: translateY(-18px);
   }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(100px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes float {
+  0% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-12px) rotate(5deg); }
+  100% { transform: translateY(0px) rotate(0deg); }
 }
 
 /* ===== DARK GRAY BLUR OVERLAY ===== */
@@ -139,7 +194,6 @@ body {
   background-size: 100px 100px;
 }
 
-/* Add a subtle film grain effect */
 .noise::before {
   content: '';
   position: absolute;
@@ -176,13 +230,6 @@ body {
   transition: all 0.3s ease;
 }
 
-@keyframes float {
-  0% { transform: translateY(0px) rotate(0deg); }
-  50% { transform: translateY(-12px) rotate(5deg); }
-  100% { transform: translateY(0px) rotate(0deg); }
-}
-
-/* Wave text container - traveling wave */
 .wave-text {
   display: inline-block;
   font-size: 3rem;
@@ -201,7 +248,6 @@ body {
   -webkit-text-fill-color: transparent;
 }
 
-/* Space character styling */
 .wave-space {
   display: inline-block;
   width: 0.4em;
@@ -215,9 +261,7 @@ body {
   backdrop-filter: blur(2px);
 }
 
-/* ======================= */
-/* ENHANCED SETTINGS MODAL - RESPONSIVE FOR SMALL SCREENS */
-/* ======================= */
+/* ===== SETTINGS MODAL ===== */
 .settings {
   position: fixed;
   inset: 0;
@@ -252,7 +296,6 @@ body {
   overflow-x: hidden;
 }
 
-/* Custom scrollbar for settings box - now properly contained within rounded corners */
 .settings-box::-webkit-scrollbar {
   width: 4px;
 }
@@ -272,7 +315,6 @@ body {
   background: rgba(168, 85, 247, 0.6);
 }
 
-/* Firefox scrollbar */
 .settings-box {
   scrollbar-width: thin;
   scrollbar-color: rgba(168, 85, 247, 0.4) rgba(255, 255, 255, 0.05);
@@ -372,7 +414,6 @@ input[type="color"] {
   padding: 4px;
 }
 
-/* Light size slider styles */
 .light-size-slider {
   margin-top: 8px;
 }
@@ -624,6 +665,12 @@ input[type="range"]::-webkit-slider-thumb {
   transform: scale(0.95);
 }
 
+.control-btn svg {
+  width: 22px;
+  height: 22px;
+  stroke: currentColor;
+}
+
 #playPauseBtn {
   background: linear-gradient(135deg, rgba(168, 85, 247, 0.7), rgba(124, 58, 237, 0.7));
   border: 1px solid rgba(255,255,255,0.2);
@@ -669,7 +716,6 @@ input[type="range"]::-webkit-slider-thumb {
   cursor: pointer;
 }
 
-/* Improved Progress Container */
 .progress-container {
   display: flex;
   align-items: center;
@@ -718,7 +764,7 @@ input[type="range"]::-webkit-slider-thumb {
   background: linear-gradient(90deg, #c084fc, #e9d5ff);
 }
 
-/* ===== STICKY NOTE - Dark Transparent (No Wave Animation) ===== */
+/* ===== STICKY NOTE ===== */
 .sticky-note-container {
   position: absolute;
   top: 50%;
@@ -752,7 +798,6 @@ input[type="range"]::-webkit-slider-thumb {
   box-shadow: 0 15px 35px rgba(0, 0, 0, 0.4);
 }
 
-/* Pin */
 .pin {
   position: absolute;
   top: -8px;
@@ -784,7 +829,6 @@ input[type="range"]::-webkit-slider-thumb {
   transform: translateX(-50%) scale(1.1);
 }
 
-/* Sticky Note Header */
 .sticky-header {
   padding: 12px 15px 5px 15px;
   display: flex;
@@ -829,7 +873,6 @@ input[type="range"]::-webkit-slider-thumb {
   color: #ff6b6b;
 }
 
-/* Sticky Note Content */
 .sticky-content {
   padding: 12px 15px 15px 15px;
 }
@@ -863,17 +906,6 @@ input[type="range"]::-webkit-slider-thumb {
   padding: 8px 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   animation: slideIn 0.2s ease;
-}
-
-@keyframes slideIn {
-  from {
-    opacity: 0;
-    transform: translateX(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
 }
 
 .todo-checkbox {
@@ -929,7 +961,6 @@ input[type="range"]::-webkit-slider-thumb {
   color: #ff6b6b;
 }
 
-/* Add Todo Input */
 .add-todo-container {
   margin-top: 12px;
   display: flex;
@@ -1034,17 +1065,6 @@ input[type="range"]::-webkit-slider-thumb {
   display: block;
 }
 
-@keyframes slideInLeft {
-  from {
-    opacity: 0;
-    transform: translateX(-20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
 .tool-panel {
   background: rgba(20, 20, 28, 0.85);
   backdrop-filter: blur(16px);
@@ -1078,7 +1098,7 @@ input[type="range"]::-webkit-slider-thumb {
   transform: translateX(5px);
 }
 
-/* ===== POMODORO TIMER POPUP - DRAGGABLE & PERSISTENT ===== */
+/* ===== POMODORO TIMER POPUP ===== */
 .pomodoro-popup {
   position: absolute;
   bottom: 30px;
@@ -1156,6 +1176,10 @@ input[type="range"]::-webkit-slider-thumb {
   font-size: 0.8rem;
   cursor: pointer;
   transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
 }
 
 .pomodoro-btn:hover {
@@ -1170,6 +1194,12 @@ input[type="range"]::-webkit-slider-thumb {
 
 .pomodoro-btn.primary:hover {
   transform: scale(1.05);
+}
+
+.pomodoro-btn svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
 }
 
 .close-panel-btn {
@@ -1485,6 +1515,321 @@ input[type="range"]::-webkit-slider-thumb {
   cursor: pointer;
 }
 
+/* ===== LIBRARY POPUP ===== */
+.library-popup {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 100;
+  animation: fadeIn 0.2s ease;
+}
+
+.library-panel {
+  background: rgba(20, 20, 28, 0.96);
+  backdrop-filter: blur(24px);
+  border-radius: 28px;
+  border: 1px solid rgba(168, 85, 247, 0.3);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  width: 450px;
+  max-width: 90vw;
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.library-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(168, 85, 247, 0.05);
+}
+
+.library-title {
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: #c084fc;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.library-title span {
+  font-size: 1.5rem;
+}
+
+.library-header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Add Music Button - Pill shape */
+.add-music-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  padding: 8px 16px;
+  border-radius: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  gap: 6px;
+  font-size: 0.8rem;
+}
+
+.add-music-btn:hover {
+  background: rgba(168, 85, 247, 0.5);
+  color: white;
+  transform: scale(1.02);
+}
+
+.add-music-btn svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+}
+
+/* Close Library Button - Circle */
+.close-library-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 18px;
+  cursor: pointer;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.close-library-btn:hover {
+  background: rgba(255, 100, 100, 0.3);
+  color: #ff6b6b;
+  transform: rotate(90deg);
+}
+
+.library-search {
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.library-search-input {
+  width: 100%;
+  padding: 12px 16px;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 30px;
+  color: white;
+  font-size: 0.85rem;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.library-search-input:focus {
+  border-color: #a855f7;
+  background: rgba(0, 0, 0, 0.6);
+  box-shadow: 0 0 10px rgba(168, 85, 247, 0.2);
+}
+
+.library-search-input::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.library-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+  max-height: 400px;
+}
+
+.library-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.library-list::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+}
+
+.library-list::-webkit-scrollbar-thumb {
+  background: rgba(168, 85, 247, 0.4);
+  border-radius: 4px;
+}
+
+.library-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(168, 85, 247, 0.6);
+}
+
+.library-song-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  margin: 4px 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.library-song-item:hover {
+  background: rgba(168, 85, 247, 0.15);
+  transform: translateX(5px);
+}
+
+.library-song-item.active {
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.25), rgba(124, 58, 237, 0.25));
+  border-left: 3px solid #a855f7;
+}
+
+.library-song-info {
+  flex: 1;
+}
+
+.library-song-title {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: white;
+  margin-bottom: 4px;
+}
+
+.library-song-artist {
+  font-size: 0.7rem;
+  opacity: 0.6;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.library-song-playing {
+  font-size: 12px;
+  color: #c084fc;
+  background: rgba(168, 85, 247, 0.2);
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-weight: 500;
+}
+
+/* Delete Song Button */
+.delete-song-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  color: rgba(255, 100, 100, 0.7);
+  opacity: 0;
+}
+
+.library-song-item:hover .delete-song-btn {
+  opacity: 1;
+}
+
+.delete-song-btn:hover {
+  background: rgba(255, 100, 100, 0.2);
+  color: #ff6b6b;
+  transform: scale(1.1);
+}
+
+.delete-song-btn svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+}
+
+.library-footer {
+  padding: 12px 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.library-stats {
+  font-size: 0.75rem;
+  opacity: 0.5;
+  text-align: center;
+  letter-spacing: 0.5px;
+}
+
+.library-empty {
+  padding: 60px 20px;
+  text-align: center;
+  opacity: 0.5;
+  font-size: 0.9rem;
+}
+
+/* ===== EYE TOGGLE BUTTON ===== */
+.eye-toggle {
+  position: fixed;
+  bottom: 30px;
+  right: 30px;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: rgba(20, 20, 28, 0.7);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  z-index: 100;
+}
+
+.eye-toggle:hover {
+  background: rgba(168, 85, 247, 0.6);
+  transform: scale(1.05);
+  border-color: rgba(168, 85, 247, 0.8);
+}
+
+.eye-toggle:active {
+  transform: scale(0.95);
+}
+
+.eye-toggle svg {
+  width: 28px;
+  height: 28px;
+  stroke: currentColor;
+}
+
+/* ===== UI HIDDEN MODE - Hides EVERYTHING ===== */
+body.ui-hidden .settings-toggle,
+body.ui-hidden .action-buttons,
+body.ui-hidden .music-player,
+body.ui-hidden .tool-popup,
+body.ui-hidden .pomodoro-popup,
+body.ui-hidden .ambient-popup,
+body.ui-hidden .library-popup,
+body.ui-hidden .sticky-note-container,
+body.ui-hidden .light-wrapper,
+body.ui-hidden .noise,
+body.ui-hidden .blur-overlay {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+/* Only keep the eye button visible when UI is hidden */
+body.ui-hidden .eye-toggle {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
 /* ===== CUSTOM CONFIRMATION POPUP ===== */
 .custom-confirm {
   position: fixed;
@@ -1501,11 +1846,6 @@ input[type="range"]::-webkit-slider-thumb {
   animation: fadeIn 0.2s ease;
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
 .confirm-box {
   background: rgba(30, 30, 40, 0.95);
   backdrop-filter: blur(20px);
@@ -1516,17 +1856,6 @@ input[type="range"]::-webkit-slider-thumb {
   border: 1px solid rgba(255, 255, 255, 0.15);
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
   animation: scaleIn 0.2s ease;
-}
-
-@keyframes scaleIn {
-  from {
-    transform: scale(0.9);
-    opacity: 0;
-  }
-  to {
-    transform: scale(1);
-    opacity: 1;
-  }
 }
 
 .confirm-message {
