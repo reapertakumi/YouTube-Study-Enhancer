@@ -1,41 +1,22 @@
 (function() {
   // ===== ROBUST AUDIO DOWNLOAD MANAGER =====
   const GITHUB_BASE = 'https://raw.githubusercontent.com/reapertakumi/YouTube-Study-Enhancer/main';
+  const MANIFEST_URL = 'https://raw.githubusercontent.com/reapertakumi/YouTube-Study-Enhancer/main/audio-manifest.json';
   const DB_NAME = 'StudyEnhancerAudio';
-  const DB_VERSION = 1;
+  const DB_VERSION = 2;
   const STORE_NAME = 'audioFiles';
-  
-  const AUDIO_FILES = {
-    music: [
-      { name: "fassounds-good-night-lofi-cozy-chill-music-160166.opus", url: `${GITHUB_BASE}/music/fassounds-good-night-lofi-cozy-chill-music-160166.opus` },
-      { name: "fassounds-lofi-study-calm-peaceful-chill-hop-112191.opus", url: `${GITHUB_BASE}/music/fassounds-lofi-study-calm-peaceful-chill-hop-112191.opus` },
-      { name: "lofidreams-cozy-lofi-background-music-457199.opus", url: `${GITHUB_BASE}/music/lofidreams-cozy-lofi-background-music-457199.opus` },
-      { name: "lofidreams-lofi-jazz-music-485312.opus", url: `${GITHUB_BASE}/music/lofidreams-lofi-jazz-music-485312.opus` },
-      { name: "lofi_music_library-coffee-lofi-chill-lofi-ambient-458901.opus", url: `${GITHUB_BASE}/music/lofi_music_library-coffee-lofi-chill-lofi-ambient-458901.opus` },
-      { name: "lofi_music_library-lofi-girl-chill-lofi-beats-lofi-ambient-461871.opus", url: `${GITHUB_BASE}/music/lofi_music_library-lofi-girl-chill-lofi-beats-lofi-ambient-461871.opus` },
-      { name: "lofi_music_library-lofi-rain-lofi-music-458077.opus", url: `${GITHUB_BASE}/music/lofi_music_library-lofi-rain-lofi-music-458077.opus` },
-      { name: "mondamusic-lofi-chill-chill-512854.opus", url: `${GITHUB_BASE}/music/mondamusic-lofi-chill-chill-512854.opus` },
-      { name: "mondamusic-lofi-lofi-chill-lofi-girl-491690.opus", url: `${GITHUB_BASE}/music/mondamusic-lofi-lofi-chill-lofi-girl-491690.opus` },
-      { name: "mondamusic-lofi-lofi-girl-lofi-chill-512853.opus", url: `${GITHUB_BASE}/music/mondamusic-lofi-lofi-girl-lofi-chill-512853.opus` },
-      { name: "sonican-lo-fi-music-loop-sentimental-jazzy-love-473154.opus", url: `${GITHUB_BASE}/music/sonican-lo-fi-music-loop-sentimental-jazzy-love-473154.opus` },
-      { name: "watermello-lofi-chill-lofi-girl-lofi-488388.opus", url: `${GITHUB_BASE}/music/watermello-lofi-chill-lofi-girl-lofi-488388.opus` },
-      { name: "watermello-lofi-lofi-girl-lofi-chill-484610.opus", url: `${GITHUB_BASE}/music/watermello-lofi-lofi-girl-lofi-chill-484610.opus` }
-    ],
-    sounds: [
-      { name: "fireplace.opus", url: `${GITHUB_BASE}/sounds/fireplace.opus` },
-      { name: "wind.opus", url: `${GITHUB_BASE}/sounds/wind.opus` },
-      { name: "bird.opus", url: `${GITHUB_BASE}/sounds/bird.opus` },
-      { name: "rain.opus", url: `${GITHUB_BASE}/sounds/rain.opus` },
-      { name: "thunder.opus", url: `${GITHUB_BASE}/sounds/thunder.opus` },
-      { name: "ocean.opus", url: `${GITHUB_BASE}/sounds/ocean.opus` },
-      { name: "break.opus", url: `${GITHUB_BASE}/sounds/break.opus` }
-    ]
-  };
   
   let db = null;
   let isDownloading = false;
   let popupElement = null;
   let pendingCallback = null;
+  let remoteManifest = null;
+  
+  // Current audio files (will be populated from manifest)
+  let currentAudioFiles = {
+    music: [],
+    sounds: []
+  };
   
   // Open IndexedDB
   function openDatabase() {
@@ -62,31 +43,18 @@
     });
   }
   
-  // Check if audio is downloaded
-  async function isAudioDownloaded() {
-    try {
-      await openDatabase();
-      const transaction = db.transaction([STORE_NAME], 'readonly');
-      const store = transaction.objectStore(STORE_NAME);
-      const totalFiles = AUDIO_FILES.music.length + AUDIO_FILES.sounds.length;
-      
-      return new Promise((resolve) => {
-        const countRequest = store.count();
-        countRequest.onsuccess = () => resolve(countRequest.result >= totalFiles);
-        countRequest.onerror = () => resolve(false);
-      });
-    } catch (error) {
-      return false;
-    }
-  }
-  
-  // Save file to IndexedDB
-  async function saveToIndexedDB(fileName, blob) {
+  // Save file to IndexedDB with metadata
+  async function saveToIndexedDB(fileName, blob, metadata = {}) {
     await openDatabase();
     return new Promise((resolve, reject) => {
       const transaction = db.transaction([STORE_NAME], 'readwrite');
       const store = transaction.objectStore(STORE_NAME);
-      const request = store.put({ fileName: fileName, blob: blob, timestamp: Date.now() });
+      const request = store.put({ 
+        fileName: fileName, 
+        blob: blob, 
+        timestamp: Date.now(),
+        ...metadata
+      });
       request.onsuccess = () => resolve();
       request.onerror = () => reject(request.error);
     });
@@ -104,11 +72,125 @@
     });
   }
   
+  // Get stored manifest from IndexedDB
+  async function getStoredManifest() {
+    await openDatabase();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction([STORE_NAME], 'readonly');
+      const store = transaction.objectStore(STORE_NAME);
+      const request = store.get('_manifest');
+      request.onsuccess = () => resolve(request.result ? request.result.data : null);
+      request.onerror = () => reject(request.error);
+    });
+  }
+  
+  // Save manifest to IndexedDB
+  async function saveManifestToDB(manifest) {
+    await openDatabase();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction([STORE_NAME], 'readwrite');
+      const store = transaction.objectStore(STORE_NAME);
+      const request = store.put({ fileName: '_manifest', data: manifest, timestamp: Date.now() });
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  }
+  
+  // Fetch remote manifest (with cache busting)
+  async function fetchRemoteManifest() {
+    try {
+      const cacheBuster = '?t=' + Date.now();
+      const url = MANIFEST_URL + cacheBuster;
+      console.log('Fetching manifest from:', url);
+      
+      const response = await fetch(url, { cache: 'no-store' });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const manifest = await response.json();
+      remoteManifest = manifest;
+      
+      console.log('Manifest loaded successfully');
+      console.log('Version:', manifest.version);
+      console.log('Last updated:', manifest.lastUpdated);
+      console.log('Music files:', manifest.files.music.length);
+      console.log('Sound files:', manifest.files.sounds.length);
+      
+      return manifest;
+    } catch (error) {
+      console.error('Error fetching manifest:', error);
+      return null;
+    }
+  }
+  
+  // Build audio files list from manifest
+  function buildAudioFilesFromManifest(manifest) {
+    if (!manifest || !manifest.files) return null;
+    
+    const musicFiles = manifest.files.music.map(file => ({
+      name: file.fileName,
+      url: `${GITHUB_BASE}/music/${file.fileName}`,
+      sizeKB: file.sizeKB || 0,
+      hash: file.hash || ''
+    }));
+    
+    const soundFiles = manifest.files.sounds.map(file => ({
+      name: file.fileName,
+      url: `${GITHUB_BASE}/sounds/${file.fileName}`,
+      sizeKB: file.sizeKB || 0,
+      hash: file.hash || ''
+    }));
+    
+    console.log('Built audio files from manifest:');
+    console.log('Music count:', musicFiles.length);
+    console.log('Music total KB:', musicFiles.reduce((sum, f) => sum + f.sizeKB, 0));
+    console.log('Sounds count:', soundFiles.length);
+    console.log('Sounds total KB:', soundFiles.reduce((sum, f) => sum + f.sizeKB, 0));
+    
+    return { music: musicFiles, sounds: soundFiles };
+  }
+  
+  // Calculate total size in KB
+  function getTotalSizeKB() {
+    const musicTotal = currentAudioFiles.music.reduce((sum, f) => sum + (f.sizeKB || 0), 0);
+    const soundsTotal = currentAudioFiles.sounds.reduce((sum, f) => sum + (f.sizeKB || 0), 0);
+    return musicTotal + soundsTotal;
+  }
+  
+  // Calculate total size in MB
+  function getTotalSizeMB() {
+    return (getTotalSizeKB() / 1024).toFixed(1);
+  }
+  
+  // Check if audio is downloaded
+  async function isAudioDownloaded() {
+    try {
+      await openDatabase();
+      const transaction = db.transaction([STORE_NAME], 'readonly');
+      const store = transaction.objectStore(STORE_NAME);
+      
+      const allFiles = [...currentAudioFiles.music, ...currentAudioFiles.sounds];
+      if (allFiles.length === 0) return false;
+      
+      return new Promise((resolve) => {
+        const countRequest = store.count();
+        countRequest.onsuccess = () => {
+          let count = countRequest.result;
+          const hasManifest = count > 0;
+          const actualFileCount = hasManifest ? count - 1 : count;
+          resolve(actualFileCount >= allFiles.length);
+        };
+        countRequest.onerror = () => resolve(false);
+      });
+    } catch (error) {
+      console.error('Error checking downloaded status:', error);
+      return false;
+    }
+  }
+  
   // Download a single file with retry logic
   async function downloadFileWithRetry(file, maxRetries = 3) {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        console.log(`Downloading ${file.name} (attempt ${attempt}/${maxRetries})`);
+        console.log(`Downloading ${file.name} (${file.sizeKB} KB) - attempt ${attempt}/${maxRetries}`);
         
         const response = await fetch(file.url, {
           cache: 'no-store',
@@ -125,8 +207,8 @@
           throw new Error('File too small - likely an error page');
         }
         
-        await saveToIndexedDB(file.name, blob);
-        console.log(`Successfully downloaded ${file.name} (${blob.size} bytes)`);
+        await saveToIndexedDB(file.name, blob, { sizeKB: file.sizeKB });
+        console.log(`Downloaded ${file.name} (${Math.round(blob.size / 1024)} KB)`);
         return { success: true, fileName: file.name };
         
       } catch (error) {
@@ -150,10 +232,12 @@
     }
     
     isDownloading = true;
-    const allFiles = [...AUDIO_FILES.music, ...AUDIO_FILES.sounds];
+    const allFiles = [...currentAudioFiles.music, ...currentAudioFiles.sounds];
     let completed = 0;
     let failed = 0;
     const failedFiles = [];
+    
+    console.log(`Starting download of ${allFiles.length} files (${getTotalSizeMB()} MB total)`);
     
     for (let i = 0; i < allFiles.length; i++) {
       const file = allFiles[i];
@@ -163,6 +247,7 @@
           current: i + 1,
           total: allFiles.length,
           fileName: file.name,
+          sizeKB: file.sizeKB,
           status: 'downloading'
         });
       }
@@ -176,6 +261,7 @@
             current: completed,
             total: allFiles.length,
             fileName: file.name,
+            sizeKB: file.sizeKB,
             status: 'completed'
           });
         }
@@ -194,12 +280,239 @@
       }
     }
     
+    // Save manifest to DB after successful download
+    if (remoteManifest) {
+      await saveManifestToDB(remoteManifest);
+      localStorage.setItem('audioLibraryVersion', remoteManifest.version);
+      console.log('Saved manifest version to localStorage:', remoteManifest.version);
+    }
+    
     isDownloading = false;
     
     if (failed === 0) {
+      console.log(`Download complete! ${completed}/${allFiles.length} files`);
       if (onComplete) onComplete(completed, allFiles.length);
     } else {
+      console.error(`Download completed with ${failed} failures`);
       if (onError) onError(`Failed to download ${failed} files: ${failedFiles.join(', ')}`);
+    }
+  }
+  
+  // Check for updates (compares local vs remote version)
+  async function checkForUpdates() {
+    console.log('Checking for updates');
+    
+    // Get remote manifest
+    const remote = await fetchRemoteManifest();
+    if (!remote) {
+      console.log('Could not fetch remote manifest');
+      return { hasUpdates: false, error: 'Cannot check for updates' };
+    }
+    
+    // Get local version from localStorage
+    const localVersion = localStorage.getItem('audioLibraryVersion');
+    
+    console.log('Local version:', localVersion);
+    console.log('Remote version:', remote.version);
+    
+    // If no local version, this is first time user
+    if (!localVersion) {
+      console.log('No local version found - first time user');
+      return { hasUpdates: false, firstTime: true };
+    }
+    
+    // Compare versions
+    if (remote.version !== localVersion) {
+      console.log(`Update available: ${localVersion} → ${remote.version}`);
+      
+      // Update currentAudioFiles with new manifest
+      const updatedFiles = buildAudioFilesFromManifest(remote);
+      if (updatedFiles) {
+        currentAudioFiles = updatedFiles;
+      }
+      
+      return { 
+        hasUpdates: true, 
+        newVersion: remote.version, 
+        oldVersion: localVersion,
+        lastUpdated: remote.lastUpdated,
+        totalSizeMB: getTotalSizeMB()
+      };
+    }
+    
+    console.log('No updates available - already on latest version');
+    return { hasUpdates: false, currentVersion: remote.version };
+  }
+  
+  // Show update notification popup (EXACT same style as download popup with emojis)
+  async function showUpdateNotification() {
+    const updateInfo = await checkForUpdates();
+    
+    if (updateInfo.hasUpdates && updateInfo.newVersion) {
+      console.log('Showing update notification for version', updateInfo.newVersion);
+      
+      // Remove any existing notification
+      const existingNotification = document.getElementById('updateNotification');
+      if (existingNotification) existingNotification.remove();
+      
+      const totalFiles = currentAudioFiles.music.length + currentAudioFiles.sounds.length;
+      const totalSizeMB = updateInfo.totalSizeMB || getTotalSizeMB();
+      
+      // Create notification popup - EXACT same style as download popup
+      const notification = document.createElement('div');
+      notification.id = 'updateNotification';
+      notification.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 10001;
+        background: rgba(20, 20, 28, 0.98);
+        backdrop-filter: blur(24px);
+        border-radius: 28px;
+        padding: 28px 32px;
+        text-align: center;
+        border: 1px solid rgba(168, 85, 247, 0.3);
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        min-width: 320px;
+        max-width: 400px;
+        font-family: system-ui, -apple-system, sans-serif;
+      `;
+      
+      notification.innerHTML = `
+        <div style="font-size: 48px; margin-bottom: 16px;">📥</div>
+        <div style="font-size: 1.2rem; font-weight: 600; margin-bottom: 8px; color: #c084fc;">Update Available</div>
+        <div style="font-size: 0.85rem; opacity: 0.7; margin-bottom: 20px; line-height: 1.4;">
+          A new version of the audio library is available.<br>
+          Version ${updateInfo.oldVersion} → ${updateInfo.newVersion}<br>
+          Size: ${totalSizeMB} MB (${totalFiles} files)
+        </div>
+        <div style="display: flex; gap: 12px; justify-content: center; margin-bottom: 20px;">
+          <button id="updateYesBtn" style="
+            background: linear-gradient(135deg, #a855f7, #7c3aed);
+            border: none;
+            padding: 10px 28px;
+            border-radius: 40px;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.2s ease;
+          ">Update Now</button>
+          <button id="updateNoBtn" style="
+            background: transparent;
+            border: 1px solid rgba(255,255,255,0.2);
+            padding: 10px 28px;
+            border-radius: 40px;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.2s ease;
+          ">Later</button>
+        </div>
+        <div id="updateProgressArea" style="display: none;">
+          <div style="background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden; height: 8px; margin-bottom: 12px;">
+            <div id="updateProgressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #a855f7, #c084fc); transition: width 0.3s;"></div>
+          </div>
+          <div id="updateStatusText" style="font-size: 0.75rem; opacity: 0.8; margin-bottom: 8px;"></div>
+          <div id="updateCurrentFile" style="font-size: 0.7rem; opacity: 0.6;"></div>
+        </div>
+      `;
+      
+      document.body.appendChild(notification);
+      
+      const yesBtn = document.getElementById('updateYesBtn');
+      const noBtn = document.getElementById('updateNoBtn');
+      const progressArea = document.getElementById('updateProgressArea');
+      const progressBar = document.getElementById('updateProgressBar');
+      const statusText = document.getElementById('updateStatusText');
+      const currentFileText = document.getElementById('updateCurrentFile');
+      
+      yesBtn.addEventListener('click', async () => {
+        yesBtn.disabled = true;
+        yesBtn.style.opacity = '0.6';
+        noBtn.disabled = true;
+        noBtn.style.opacity = '0.6';
+        progressArea.style.display = 'block';
+        
+        // Clear old version to force re-download of updated files
+        localStorage.removeItem('audioLibraryVersion');
+        
+        await downloadAllFiles(
+          (progress) => {
+            const percent = (progress.current / progress.total) * 100;
+            progressBar.style.width = `${percent}%`;
+            
+            if (progress.status === 'downloading') {
+              statusText.textContent = `Updating... ${Math.round(percent)}% (${progress.current}/${progress.total})`;
+              currentFileText.textContent = `${progress.fileName.substring(0, 35)}... (${progress.sizeKB} KB)`;
+            } else if (progress.status === 'completed') {
+              statusText.textContent = `Updated: ${progress.current}/${progress.total}`;
+              currentFileText.textContent = '';
+            } else if (progress.status === 'failed') {
+              statusText.textContent = `Failed: ${progress.fileName}`;
+              currentFileText.textContent = `Error: ${progress.error}`;
+            }
+          },
+          async (completed, total) => {
+            notification.innerHTML = `
+              <div style="font-size: 48px; margin-bottom: 16px;">✅</div>
+              <div style="font-size: 1.2rem; font-weight: 600; margin-bottom: 8px; color: #4ade80;">Update Complete</div>
+              <div style="font-size: 0.85rem; opacity: 0.7; margin-bottom: 20px;">
+                Successfully updated to version ${updateInfo.newVersion}<br>
+                (${completed}/${total} files, ${totalSizeMB} MB)
+              </div>
+              <button id="closeUpdateSuccessBtn" style="
+                background: linear-gradient(135deg, #a855f7, #7c3aed);
+                border: none;
+                padding: 10px 28px;
+                border-radius: 40px;
+                color: white;
+                font-weight: 600;
+                cursor: pointer;
+                font-size: 0.9rem;
+              ">Continue</button>
+            `;
+            
+            const closeBtn = document.getElementById('closeUpdateSuccessBtn');
+            closeBtn.addEventListener('click', () => {
+              notification.remove();
+              location.reload();
+            });
+          },
+          (error) => {
+            notification.innerHTML = `
+              <div style="font-size: 48px; margin-bottom: 16px;">⚠️</div>
+              <div style="font-size: 1.2rem; font-weight: 600; margin-bottom: 8px; color: #ff6b6b;">Update Failed</div>
+              <div style="font-size: 0.85rem; opacity: 0.7; margin-bottom: 20px;">
+                ${error}<br><br>
+                Please check your internet connection and try again.
+              </div>
+              <button id="updateRetryBtn" style="
+                background: linear-gradient(135deg, #a855f7, #7c3aed);
+                border: none;
+                padding: 10px 28px;
+                border-radius: 40px;
+                color: white;
+                font-weight: 600;
+                cursor: pointer;
+                font-size: 0.9rem;
+              ">Retry</button>
+            `;
+            
+            const retryBtn = document.getElementById('updateRetryBtn');
+            retryBtn.addEventListener('click', () => {
+              notification.remove();
+              showUpdateNotification();
+            });
+          }
+        );
+      });
+      
+      noBtn.addEventListener('click', () => {
+        notification.remove();
+      });
     }
   }
   
@@ -214,13 +527,19 @@
   
   // Show download popup
   function showDownloadPopup(callback) {
-    // Store callback to execute after download
     pendingCallback = callback;
     
-    // Remove existing popup
     if (popupElement) {
       popupElement.remove();
     }
+    
+    const totalFiles = currentAudioFiles.music.length + currentAudioFiles.sounds.length;
+    const totalSizeKB = getTotalSizeKB();
+    const totalSizeMB = (totalSizeKB / 1024).toFixed(1);
+    
+    console.log('Download popup - Total files:', totalFiles);
+    console.log('Download popup - Total size KB:', totalSizeKB);
+    console.log('Download popup - Total size MB:', totalSizeMB);
     
     popupElement = document.createElement('div');
     popupElement.id = 'audioDownloadPopup';
@@ -244,10 +563,10 @@
     
     popupElement.innerHTML = `
       <div style="font-size: 48px; margin-bottom: 16px;">🎵</div>
-      <div style="font-size: 1.2rem; font-weight: 600; margin-bottom: 8px; color: #c084fc;">Download Audio Library?</div>
+      <div style="font-size: 1.2rem; font-weight: 600; margin-bottom: 8px; color: #c084fc;">Download Audio Library</div>
       <div style="font-size: 0.85rem; opacity: 0.7; margin-bottom: 20px; line-height: 1.4;">
-        This feature requires ${AUDIO_FILES.music.length + AUDIO_FILES.sounds.length} audio files (~45MB).<br>
-        Download once and use offline! 🎧
+        This feature requires ${totalFiles} audio files (${totalSizeMB} MB).<br>
+        Download once and use offline.
       </div>
       <div style="display: flex; gap: 12px; justify-content: center; margin-bottom: 20px;">
         <button id="downloadYesBtn" style="
@@ -304,8 +623,8 @@
           progressBar.style.width = `${percent}%`;
           
           if (progress.status === 'downloading') {
-            statusText.textContent = `Downloading... ${Math.round(percent)}%`;
-            currentFileText.textContent = `File: ${progress.fileName.substring(0, 40)}...`;
+            statusText.textContent = `Downloading... ${Math.round(percent)}% (${progress.current}/${progress.total})`;
+            currentFileText.textContent = `${progress.fileName.substring(0, 35)}... (${progress.sizeKB} KB)`;
           } else if (progress.status === 'completed') {
             statusText.textContent = `Completed: ${progress.current}/${progress.total}`;
             currentFileText.textContent = '';
@@ -317,9 +636,9 @@
         async (completed, total) => {
           popupElement.innerHTML = `
             <div style="font-size: 48px; margin-bottom: 16px;">✅</div>
-            <div style="font-size: 1.2rem; font-weight: 600; margin-bottom: 8px; color: #4ade80;">Download Complete!</div>
+            <div style="font-size: 1.2rem; font-weight: 600; margin-bottom: 8px; color: #4ade80;">Download Complete</div>
             <div style="font-size: 0.85rem; opacity: 0.7; margin-bottom: 20px;">
-              Successfully downloaded ${completed}/${total} audio files.
+              Successfully downloaded ${completed}/${total} audio files (${getTotalSizeMB()} MB).
             </div>
             <button id="closeSuccessBtn" style="
               background: linear-gradient(135deg, #a855f7, #7c3aed);
@@ -337,12 +656,10 @@
           closeBtn.addEventListener('click', () => {
             popupElement.remove();
             popupElement = null;
-            // Execute the pending callback (play music, etc.)
             if (pendingCallback) {
               pendingCallback();
               pendingCallback = null;
             }
-            // Reload to initialize audio
             location.reload();
           });
         },
@@ -383,9 +700,25 @@
     });
   }
   
-  // Wrapper for audio actions - THIS IS THE KEY FIX
+  // Wrapper for audio actions
   async function withAudioCheck(callback) {
+    console.log('withAudioCheck called - currentAudioFiles has', currentAudioFiles.music.length, 'music files');
+    
+    // If no files loaded yet, try to load manifest
+    if (currentAudioFiles.music.length === 0) {
+      const manifest = await fetchRemoteManifest();
+      if (manifest) {
+        const updatedFiles = buildAudioFilesFromManifest(manifest);
+        if (updatedFiles) {
+          currentAudioFiles = updatedFiles;
+          console.log('Loaded audio files from manifest:', getTotalSizeKB(), 'KB total');
+        }
+      }
+    }
+    
     const downloaded = await isAudioDownloaded();
+    console.log('Audio downloaded?', downloaded);
+    
     if (downloaded) {
       callback();
     } else {
@@ -393,7 +726,7 @@
     }
   }
 
-  // ===== REST OF YOUR UI CODE (keep all your existing UI code from your original file) =====
+  // ===== REST OF UI CODE =====
   
   // 30 unique emoji variants for the center icon
   const icons = [
@@ -633,87 +966,39 @@
     updateTextAnimationSpeed();
   }
 
-  // Enhanced save function with size verification
-function saveToLocal() {
-  const toStore = {
-    secondLight: state.secondLight,
-    mainColor: state.mainColor,
-    secondColor: state.secondColor,
-    movement: state.movement,
-    speed: state.speed,
-    mainPosition: state.mainPosition,
-    textAnimationSpeed: state.textAnimationSpeed,
-    mainLightSize: state.mainLightSize,
-    secondLightSize: state.secondLightSize
-  };
-  localStorage.setItem("studyMode", JSON.stringify(toStore));
-  console.log("Saved settings:", toStore); // Debug log
-}
+  function saveToLocal() {
+    const toStore = {
+      secondLight: state.secondLight,
+      mainColor: state.mainColor,
+      secondColor: state.secondColor,
+      movement: state.movement,
+      speed: state.speed,
+      mainPosition: state.mainPosition,
+      textAnimationSpeed: state.textAnimationSpeed,
+      mainLightSize: state.mainLightSize,
+      secondLightSize: state.secondLightSize
+    };
+    localStorage.setItem("studyMode", JSON.stringify(toStore));
+  }
 
-// Enhanced load function with proper size restoration
-function loadFromLocal() {
-  const saved = localStorage.getItem("studyMode");
-  if (saved) {
-    try {
-      const parsed = JSON.parse(saved);
-      state = { ...state, ...parsed };
-      
-      // Ensure valid size values
-      if (typeof state.mainLightSize !== 'number' || state.mainLightSize < 100 || state.mainLightSize > 400) {
-        state.mainLightSize = 400;
+  function loadFromLocal() {
+    const saved = localStorage.getItem("studyMode");
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        state = { ...state, ...parsed };
+        
+        if (typeof state.mainLightSize !== 'number' || state.mainLightSize < 100 || state.mainLightSize > 400) {
+          state.mainLightSize = 400;
+        }
+        if (typeof state.secondLightSize !== 'number' || state.secondLightSize < 200 || state.secondLightSize > 800) {
+          state.secondLightSize = 800;
+        }
+      } catch(e) {
+        console.error("Error loading settings:", e);
       }
-      if (typeof state.secondLightSize !== 'number' || state.secondLightSize < 200 || state.secondLightSize > 800) {
-        state.secondLightSize = 800;
-      }
-      
-      // Convert old size scale if needed (backward compatibility)
-      if (state.mainLightSize < 100 && state.mainLightSize > 0) {
-        state.mainLightSize = 400;
-      }
-      if (state.secondLightSize < 200 && state.secondLightSize > 0) {
-        state.secondLightSize = 800;
-      }
-      
-      console.log("Loaded settings:", parsed); // Debug log
-      console.log("Restored light sizes - Main:", state.mainLightSize, "Secondary:", state.secondLightSize);
-      
-    } catch(e) {
-      console.error("Error loading settings:", e);
     }
   }
-}
-
-// Save sizes specifically (call this whenever sizes change)
-function saveLightSizes() {
-  localStorage.setItem("mainLightSize", state.mainLightSize);
-  localStorage.setItem("secondLightSize", state.secondLightSize);
-  saveToLocal(); // Also save full state
-}
-
-// Load sizes specifically
-function loadLightSizes() {
-  const savedMain = localStorage.getItem("mainLightSize");
-  const savedSecond = localStorage.getItem("secondLightSize");
-  
-  if (savedMain) state.mainLightSize = parseInt(savedMain);
-  if (savedSecond) state.secondLightSize = parseInt(savedSecond);
-  
-  // Apply sizes
-  if (mainLight) {
-    mainLight.style.width = `${state.mainLightSize}px`;
-    mainLight.style.height = `${state.mainLightSize}px`;
-  }
-  if (secondLight) {
-    secondLight.style.width = `${state.secondLightSize}px`;
-    secondLight.style.height = `${state.secondLightSize}px`;
-  }
-  
-  // Update slider values
-  if (mainLightSizeSlider) mainLightSizeSlider.value = state.mainLightSize;
-  if (secondLightSizeSlider) secondLightSizeSlider.value = state.secondLightSize;
-  if (mainLightSizeValue) mainLightSizeValue.textContent = `${Math.round(state.mainLightSize / 400 * 100)}%`;
-  if (secondLightSizeValue) secondLightSizeValue.textContent = `${Math.round(state.secondLightSize / 800 * 100)}%`;
-}
 
   function randomIcon() {
     const randomIndex = Math.floor(Math.random() * icons.length);
@@ -898,22 +1183,7 @@ function loadLightSizes() {
   if (state.movement === "none" && state.secondLight) applySecondLightBehavior();
 
   // ===== MUSIC PLAYER =====
-  const playlist = [
-    { artist: "fassounds", song: "Good Night - Lofi Cozy Chill Music", file: "fassounds-good-night-lofi-cozy-chill-music-160166.opus" },
-    { artist: "fassounds", song: "Lofi Study - Calm Peaceful Chill Hop", file: "fassounds-lofi-study-calm-peaceful-chill-hop-112191.opus" },
-    { artist: "lofidreams", song: "Cozy Lofi Background Music", file: "lofidreams-cozy-lofi-background-music-457199.opus" },
-    { artist: "lofidreams", song: "Lofi Jazz Music", file: "lofidreams-lofi-jazz-music-485312.opus" },
-    { artist: "lofi_music_library", song: "Coffee Lofi - Chill Lofi Ambient", file: "lofi_music_library-coffee-lofi-chill-lofi-ambient-458901.opus" },
-    { artist: "lofi_music_library", song: "Lofi Girl - Chill Lofi Beats Lofi Ambient", file: "lofi_music_library-lofi-girl-chill-lofi-beats-lofi-ambient-461871.opus" },
-    { artist: "lofi_music_library", song: "Lofi Rain - Lofi Music", file: "lofi_music_library-lofi-rain-lofi-music-458077.opus" },
-    { artist: "mondamusic", song: "Lofi Chill", file: "mondamusic-lofi-chill-chill-512854.opus" },
-    { artist: "mondamusic", song: "Lofi - Chill Lofi Girl", file: "mondamusic-lofi-lofi-chill-lofi-girl-491690.opus" },
-    { artist: "mondamusic", song: "Lofi - Lofi Girl Lofi Chill", file: "mondamusic-lofi-lofi-girl-lofi-chill-512853.opus" },
-    { artist: "sonican", song: "Lo Fi Music Loop - Sentimental Jazzy Love", file: "sonican-lo-fi-music-loop-sentimental-jazzy-love-473154.opus" },
-    { artist: "watermello", song: "Lofi Chill - Lofi Girl Lofi", file: "watermello-lofi-chill-lofi-girl-lofi-488388.opus" },
-    { artist: "watermello", song: "Lofi - Lofi Girl Lofi Chill", file: "watermello-lofi-lofi-girl-lofi-chill-484610.opus" }
-  ];
-
+  let playlist = [];
   let currentTrack = 0;
   let audio = new Audio();
   let isPlaying = false;
@@ -929,6 +1199,31 @@ function loadLightSizes() {
   const timeTotal = document.getElementById('timeTotal');
   const artistNameSpan = document.getElementById('artistName');
   const songNameSpan = document.getElementById('songName');
+
+  function buildPlaylistFromManifest() {
+    playlist = currentAudioFiles.music.map(file => {
+      let artist = "Lofi Artist";
+      let song = file.name.replace(/\.opus$/, '').replace(/-/g, ' ');
+      
+      if (file.name.includes('fassounds')) artist = "fassounds";
+      else if (file.name.includes('lofidreams')) artist = "lofidreams";
+      else if (file.name.includes('lofi_music_library')) artist = "lofi_music_library";
+      else if (file.name.includes('mondamusic')) artist = "mondamusic";
+      else if (file.name.includes('sonican')) artist = "sonican";
+      else if (file.name.includes('watermello')) artist = "watermello";
+      
+      let cleanSong = song;
+      if (cleanSong.length > 40) cleanSong = cleanSong.substring(0, 37) + '...';
+      
+      return {
+        artist: artist,
+        song: cleanSong,
+        file: file.name
+      };
+    });
+    
+    console.log('Built playlist with', playlist.length, 'tracks');
+  }
 
   async function loadTrack(index) {
     const track = playlist[index];
@@ -992,6 +1287,7 @@ function loadLightSizes() {
   }
 
   function nextTrack() {
+    if (playlist.length === 0) return;
     currentTrack = (currentTrack + 1) % playlist.length;
     loadTrack(currentTrack);
     if (isPlaying) {
@@ -1004,6 +1300,7 @@ function loadLightSizes() {
   }
 
   function prevTrack() {
+    if (playlist.length === 0) return;
     currentTrack = (currentTrack - 1 + playlist.length) % playlist.length;
     loadTrack(currentTrack);
     if (isPlaying) {
@@ -1027,7 +1324,6 @@ function loadLightSizes() {
     audio.volume = e.target.value / 100;
   });
 
-  // FIXED: Music player buttons with download check
   playPauseBtn.addEventListener('click', () => {
     withAudioCheck(() => togglePlayPause());
   });
@@ -1111,7 +1407,6 @@ function loadLightSizes() {
     return audio;
   }
   
-  // FIXED: Sound button with download check
   soundBtn.addEventListener('click', () => {
     withAudioCheck(() => {
       if (ambientOpen) {
@@ -1168,7 +1463,6 @@ function loadLightSizes() {
       }
     }
     
-    // FIXED: Ambient sound toggle with download check
     toggle.addEventListener('click', () => {
       withAudioCheck(async () => {
         ambientEnabled[soundName] = !ambientEnabled[soundName];
@@ -1805,21 +2099,44 @@ function loadLightSizes() {
   
   // Initialize audio player UI
   async function initAudioPlayer() {
+    console.log('Initializing audio player');
+    
+    // Load manifest first
+    const manifest = await fetchRemoteManifest();
+    if (manifest) {
+      const updatedFiles = buildAudioFilesFromManifest(manifest);
+      if (updatedFiles) {
+        currentAudioFiles = updatedFiles;
+      }
+      buildPlaylistFromManifest();
+      
+      const totalKB = getTotalSizeKB();
+      console.log(`Total audio library size: ${totalKB} KB (${(totalKB / 1024).toFixed(1)} MB)`);
+      
+      // Check for updates on every page load
+      await showUpdateNotification();
+    } else {
+      console.warn('Could not load manifest, using empty playlist');
+      buildPlaylistFromManifest();
+    }
+    
     const hasAudio = await isAudioDownloaded();
-    if (hasAudio) {
-      loadTrack(0);
+    console.log('Audio already downloaded?', hasAudio);
+    
+    if (hasAudio && playlist.length > 0) {
+      await loadTrack(0);
       playPauseBtn.disabled = false;
       playPauseBtn.style.opacity = '1';
       prevBtn.disabled = false;
       prevBtn.style.opacity = '1';
       nextBtn.disabled = false;
       nextBtn.style.opacity = '1';
-      artistNameSpan.textContent = playlist[0].artist;
-      songNameSpan.textContent = playlist[0].song;
+      artistNameSpan.textContent = playlist[0]?.artist || 'Lofi Artist';
+      songNameSpan.textContent = playlist[0]?.song || 'Study Music';
     } else {
-      artistNameSpan.textContent = '🎵';
-      songNameSpan.textContent = 'Click play to download audio library';
-      playPauseBtn.disabled = false;  // DON'T disable - we want them to click!
+      artistNameSpan.textContent = '🎵 Audio Library';
+      songNameSpan.textContent = 'Click play to download';
+      playPauseBtn.disabled = false;
       playPauseBtn.style.opacity = '1';
       prevBtn.disabled = false;
       prevBtn.style.opacity = '1';
@@ -1830,5 +2147,6 @@ function loadLightSizes() {
     playPauseBtn.textContent = '▶';
   }
   
+  // Start the app
   initAudioPlayer();
 })();

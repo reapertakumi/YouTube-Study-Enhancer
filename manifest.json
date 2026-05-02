@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "YouTube Study Enhancer",
-  "version": "0.3.8",
+  "version": "0.3.9",
   "description": "Enhance your YouTube studying experience and block distracting sites with custom redirection",
   "permissions": [
     "storage",
@@ -46,7 +46,8 @@
       "resources": [
         "blocker.html",
         "blocker.css",
-        "blocker_ui.js"
+        "blocker_ui.js",
+        "audio-manifest.json"
       ],
       "matches": ["<all_urls>"]
     }
