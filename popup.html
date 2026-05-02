@@ -10,6 +10,11 @@
         <img src="icons/icon128.png" alt="Logo">
       </div>
       <h1>YT Study Enhancer</h1>
+      <div class="home-toggle" id="homeBtn">
+        <svg class="home-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />
+        </svg>
+      </div>
       <div class="theme-toggle" id="themeToggle">
         <svg class="theme-icon moon-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.72 9.72 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998Z" />
@@ -84,55 +89,9 @@
       </div>
     </div>
     <div class="section-content" id="blockContent">
-      <div class="card">
-        <span>YouTube</span>
-        <label class="switch">
-          <input type="checkbox" id="blockYoutube">
-          <span class="slider"></span>
-        </label>
-      </div>
-      <div class="card">
-        <span>YouTube Shorts</span>
-        <label class="switch">
-          <input type="checkbox" id="shorts">
-          <span class="slider"></span>
-        </label>
-      </div>
-      <div class="card">
-        <span>Instagram</span>
-        <label class="switch">
-          <input type="checkbox" id="instagram">
-          <span class="slider"></span>
-        </label>
-      </div>
-      <div class="card">
-        <span>X (Twitter)</span>
-        <label class="switch">
-          <input type="checkbox" id="twitter">
-          <span class="slider"></span>
-        </label>
-      </div>
-      <div class="card">
-        <span>TikTok</span>
-        <label class="switch">
-          <input type="checkbox" id="tiktok">
-          <span class="slider"></span>
-        </label>
-      </div>
-      <div class="card">
-        <span>Pinterest</span>
-        <label class="switch">
-          <input type="checkbox" id="pinterest">
-          <span class="slider"></span>
-        </label>
-      </div>
-      <div class="card">
-        <span>Reddit</span>
-        <label class="switch">
-          <input type="checkbox" id="reddit">
-          <span class="slider"></span>
-        </label>
-      </div>
+      <!-- Default sites will be loaded here by JavaScript -->
+      <div id="defaultSitesContainer"></div>
+      <!-- Custom domains will be loaded here by JavaScript -->
       <div id="customDomainsContainer"></div>
       <div class="add-domain-wrapper">
         <button class="add-domain-full-btn" id="addDomainBtn">
@@ -150,7 +109,7 @@
     <div class="version-section">
       <div id="versionDisplay" class="version-number"></div>
       <div class="made-by">
-        <a href="https://github.com/reapertakumi/YouTube-Study-Enhancer" target="_blank" class="github-link">made by @reapertakumi</a>
+        <a href="https://github.com/reapertakumi/YouTube-Study-Enhancer" target="_blank" class="github-link">made by @reapertakumi, yasmin</a>
       </div>
     </div>
   </div>
@@ -207,11 +166,11 @@
       </div>
       
       <div class="settings-tab-bar">
-        <button class="settings-tab-btn active" data-tab="basic">Basic</button>
+        <button class="settings-tab-btn active" data-tab="general">General</button>
         <button class="settings-tab-btn" data-tab="youtube">YouTube</button>
       </div>
       
-      <div class="settings-tab-content active" id="basicTab">
+      <div class="settings-tab-content active" id="generalTab">
         <div class="settings-section">
           <div class="settings-item-row">
             <span class="settings-label">Theme</span>
@@ -223,16 +182,57 @@
         </div>
         
         <div class="settings-section">
+          <div class="settings-item-row">
+            <span class="settings-label">Theme Preset</span>
+            <select id="themePresetSelect" class="settings-font-select">
+              <option value="default">Default</option>
+              <option value="sunset">Sunset / Sunrise</option>
+              <option value="ocean">Ocean</option>
+              <option value="forest">Forest</option>
+              <option value="midnight">Midnight</option>
+              <option value="coffee">Coffee</option>
+              <option value="cyberpunk">Cyberpunk</option>
+              <option value="aurora">Aurora</option>
+              <option value="sakura">Sakura</option>
+            </select>
+          </div>
+        </div>
+        
+        <div class="settings-section">
+          <div class="settings-item-row">
+            <span class="settings-label">Font</span>
+            <select id="fontSelect" class="settings-font-select">
+              <option value="system-ui">System Default</option>
+              <option value="Inter">Inter</option>
+              <option value="Roboto">Roboto</option>
+              <option value="Open Sans">Open Sans</option>
+              <option value="Montserrat">Montserrat</option>
+              <option value="Poppins">Poppins</option>
+              <option value="Lato">Lato</option>
+              <option value="Source Code Pro">Source Code Pro</option>
+              <option value="Fira Code">Fira Code</option>
+              <option value="JetBrains Mono">JetBrains Mono</option>
+            </select>
+          </div>
+        </div>
+        
+        <div class="settings-section">
           <button id="changePasswordBtn" class="change-password-btn">Change Password</button>
         </div>
         
         <div class="settings-section">
+          <button id="revertToDefaultBtn" class="revert-default-btn">Revert to Default</button>
+          <div class="revert-description">Reset all settings to factory defaults</div>
+        </div>
+        
+        <div class="settings-section">
           <div class="settings-version-row">
-            <span class="settings-label">Version</span>
-            <span id="settingsVersion" class="settings-version-value">0.2.7</span>
+            <span class="settings-label">Current Version</span>
+            <span id="settingsVersion" class="settings-version-value">0.3.0</span>
           </div>
-          <div class="settings-github-row">
-            <a href="https://github.com/reapertakumi/YouTube-Study-Enhancer" target="_blank" class="settings-github-link">GitHub</a>
+          <div class="settings-version-row">
+            <span class="settings-label">GitHub Version</span>
+            <a id="githubVersionLink" href="https://github.com/reapertakumi/YouTube-Study-Enhancer" target="_blank" class="settings-version-value" style="text-decoration: none; cursor: pointer;">--</a>
           </div>
         </div>
       </div>
@@ -250,6 +250,23 @@
             Remove Mode: Removes feed and expands video
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONFIRM RESET MODAL -->
+  <div id="confirmResetModal" class="confirm-modal" style="display: none;">
+    <div class="confirm-modal-content">
+      <div class="confirm-modal-header">
+        <span>Reset to Default</span>
+      </div>
+      <div class="confirm-modal-body">
+        <p>Are you sure you want to reset all settings to their default values?</p>
+        <p class="confirm-modal-warning">This action cannot be undone.</p>
+      </div>
+      <div class="confirm-modal-footer">
+        <button id="confirmResetCancelBtn" class="confirm-modal-btn cancel">Cancel</button>
+        <button id="confirmResetOkBtn" class="confirm-modal-btn confirm">Reset</button>
       </div>
     </div>
   </div>

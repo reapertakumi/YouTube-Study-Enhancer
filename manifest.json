@@ -1,10 +1,16 @@
 {
   "manifest_version": 3,
   "name": "YouTube Study Enhancer",
-  "version": "0.3.0",
-  "description": "Enhance your YouTube studying experience and block distracting sites",
-  "permissions": ["storage", "scripting", "activeTab"],
-  "host_permissions": ["<all_urls>"],
+  "version": "0.3.8",
+  "description": "Enhance your YouTube studying experience and block distracting sites with custom redirection",
+  "permissions": [
+    "storage",
+    "scripting",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
   "background": {
     "service_worker": "background.js"
   },
@@ -23,22 +29,38 @@
   },
   "content_scripts": [
     {
-      "matches": ["*://*.youtube.com/*"],
-      "js": ["content.js"],
+      "matches": [
+        "*://*.youtube.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
       "run_at": "document_idle",
       "all_frames": false
     },
     {
-      "matches": ["<all_urls>"],
-      "js": ["blocker.js"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "blocker.js"
+      ],
       "run_at": "document_start",
       "all_frames": true
     }
   ],
   "web_accessible_resources": [
     {
-      "resources": ["music/*"],
-      "matches": ["<all_urls>"]
+      "resources": [
+        "music/*",
+        "sounds/*",
+        "blocker.html",
+        "blocker.css",
+        "blocker_ui.js"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
     }
   ]
 }

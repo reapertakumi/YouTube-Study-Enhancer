@@ -13,6 +13,20 @@ let isFirstTimeLock = true;
 let domainModalOverlay = null;
 let isLocked = false;
 
+// Default blockable sites configuration
+const DEFAULT_BLOCK_SITES = [
+  { id: "blockYoutube", name: "YouTube", deletable: false },
+  { id: "shorts", name: "YouTube Shorts", deletable: false },
+  { id: "instagram", name: "Instagram", deletable: true },
+  { id: "twitter", name: "X (Twitter)", deletable: true },
+  { id: "tiktok", name: "TikTok", deletable: true },
+  { id: "pinterest", name: "Pinterest", deletable: true },
+  { id: "reddit", name: "Reddit", deletable: true }
+];
+
+// Key for storing removed default sites
+const REMOVED_SITES_KEY = "removedDefaultSites";
+
 document.addEventListener("DOMContentLoaded", () => {
   console.log("Popup loaded - initializing...");
   
@@ -37,10 +51,11 @@ document.addEventListener("DOMContentLoaded", () => {
     setTimeout(() => {
       initClickableCards();
       makeCustomDomainsClickable();
+      makeDefaultSitesClickable();
     }, 100);
   });
   
-  storage.sync.get([...allIds, "hideFeedMode", "theme", "youtubeCollapsed", "blockCollapsed"], (data) => {
+  storage.sync.get([...allIds, "hideFeedMode", "theme", "youtubeCollapsed", "blockCollapsed", "fontFamily", "themePreset"], (data) => {
     console.log("Loaded settings:", data);
     
     allIds.forEach(id => {
@@ -49,6 +64,12 @@ document.addEventListener("DOMContentLoaded", () => {
         element.checked = data[id] === true;
       }
     });
+    
+    const savedFont = data.fontFamily || 'system-ui';
+    applyFontToPopup(savedFont);
+    
+    const savedPreset = data.themePreset || 'default';
+    applyThemePreset(savedPreset);
     
     const youtubeContent = document.getElementById('youtubeContent');
     const blockContent = document.getElementById('blockContent');
@@ -85,6 +106,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   loadCustomDomains();
+  loadDefaultSites();
 
   allIds.forEach(id => {
     const element = document.getElementById(id);
@@ -135,6 +157,16 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  // Add this after the themeToggle event listener code, before setupCollapseHandlers call
+
+const homeBtn = document.getElementById('homeBtn');
+if (homeBtn) {
+  homeBtn.addEventListener('click', () => {
+    const blockerUrl = chrome.runtime.getURL('blocker.html');
+    chrome.tabs.create({ url: blockerUrl });
+  });
+}
+
   const addDomainBtn = document.getElementById('addDomainBtn');
   if (addDomainBtn) {
     addDomainBtn.addEventListener('click', () => {
@@ -161,12 +193,13 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   const settingsWheelBtn = document.getElementById('settingsWheelBtn');
-  
   if (settingsWheelBtn) {
-    settingsWheelBtn.addEventListener('click', (e) => {
+    const newSettingsWheelBtn = settingsWheelBtn.cloneNode(true);
+    settingsWheelBtn.parentNode.replaceChild(newSettingsWheelBtn, settingsWheelBtn);
+    
+    newSettingsWheelBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       e.preventDefault();
-      console.log("Cogwheel clicked - opening settings modal");
       openSettingsModal();
     });
   }
@@ -178,6 +211,30 @@ document.addEventListener("DOMContentLoaded", () => {
     initClickableCards();
   }, 100);
 });
+
+function applyFontToPopup(fontFamily) {
+  document.body.style.fontFamily = fontFamily;
+  const elements = document.querySelectorAll('.settings-label, .card span, .section-title span, .version-number, .github-link, button, input, .settings-version-value');
+  elements.forEach(el => {
+    el.style.fontFamily = fontFamily;
+  });
+}
+
+function applyThemePreset(preset) {
+  const presetClasses = [
+    'theme-default', 'theme-sunset', 'theme-ocean', 'theme-forest', 
+    'theme-midnight', 'theme-coffee', 'theme-cyberpunk', 'theme-aurora', 'theme-sakura'
+  ];
+  presetClasses.forEach(className => {
+    document.body.classList.remove(className);
+  });
+  
+  if (preset && preset !== 'default') {
+    document.body.classList.add(`theme-${preset}`);
+  }
+  
+  storage.sync.set({ themePreset: preset });
+}
 
 function updateLockUI() {
   const lockBtn = document.getElementById('lockBtn');
@@ -203,6 +260,7 @@ function setLocked(locked) {
   setTimeout(() => {
     initClickableCards();
     makeCustomDomainsClickable();
+    makeDefaultSitesClickable();
   }, 50);
 }
 
@@ -534,7 +592,7 @@ function setupCollapseHandlers() {
 }
 
 function notifyAllTabs() {
-  storage.sync.get([...blockIds, 'customDomains', 'hideFeedMode'], (data) => {
+  storage.sync.get([...blockIds, 'customDomains', 'hideFeedMode', 'fontFamily', 'themePreset', REMOVED_SITES_KEY], (data) => {
     const message = { type: 'SETTINGS_UPDATED', settings: data };
     if (typeof chrome !== 'undefined' && chrome.tabs) {
       chrome.tabs.query({}, (tabs) => {
@@ -545,6 +603,135 @@ function notifyAllTabs() {
     }
   });
 }
+
+// ============ DEFAULT SITES FUNCTIONS ============
+
+function loadDefaultSites() {
+  storage.sync.get([...DEFAULT_BLOCK_SITES.map(s => s.id), REMOVED_SITES_KEY], (data) => {
+    const removedSites = data[REMOVED_SITES_KEY] || [];
+    const container = document.getElementById('defaultSitesContainer');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    
+    DEFAULT_BLOCK_SITES.forEach(site => {
+      if (removedSites.includes(site.id)) return;
+      
+      const card = createDefaultSiteCard(site, data[site.id] === true);
+      container.appendChild(card);
+    });
+    
+    setTimeout(() => {
+      makeDefaultSitesClickable();
+    }, 50);
+  });
+}
+
+function createDefaultSiteCard(site, isEnabled) {
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.dataset.siteId = site.id;
+  
+  const nameSpan = document.createElement('span');
+  nameSpan.textContent = site.name;
+  
+  const actionsDiv = document.createElement('div');
+  actionsDiv.style.display = 'flex';
+  actionsDiv.style.alignItems = 'center';
+  actionsDiv.style.gap = '8px';
+  
+  const toggleSwitch = document.createElement('label');
+  toggleSwitch.className = 'switch';
+  const checkbox = document.createElement('input');
+  checkbox.type = 'checkbox';
+  checkbox.id = site.id;
+  checkbox.checked = isEnabled;
+  checkbox.addEventListener('change', (e) => {
+    if (isLocked) {
+      e.stopPropagation();
+      e.preventDefault();
+      return;
+    }
+    e.stopPropagation();
+    storage.sync.set({ [site.id]: e.target.checked }, () => {
+      notifyAllTabs();
+    });
+  });
+  const slider = document.createElement('span');
+  slider.className = 'slider';
+  toggleSwitch.appendChild(checkbox);
+  toggleSwitch.appendChild(slider);
+  
+  actionsDiv.appendChild(toggleSwitch);
+  
+  if (site.deletable) {
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'delete-default-btn';
+    deleteBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>`;
+    deleteBtn.title = `Remove ${site.name} from block list`;
+    deleteBtn.addEventListener('click', (e) => {
+      if (isLocked) return;
+      e.stopPropagation();
+      removeDefaultSite(site.id, site.name);
+    });
+    actionsDiv.appendChild(deleteBtn);
+  }
+  
+  card.appendChild(nameSpan);
+  card.appendChild(actionsDiv);
+  return card;
+}
+
+function removeDefaultSite(siteId, siteName) {
+  storage.sync.get([REMOVED_SITES_KEY, siteId], (data) => {
+    const removedSites = data[REMOVED_SITES_KEY] || [];
+    
+    if (!removedSites.includes(siteId)) {
+      removedSites.push(siteId);
+    }
+    
+    storage.sync.set({ 
+      [REMOVED_SITES_KEY]: removedSites,
+      [siteId]: false 
+    }, () => {
+      const card = document.querySelector(`.card[data-site-id="${siteId}"]`);
+      if (card) {
+        card.style.animation = 'cardFadeOut 0.2s ease-out forwards';
+        setTimeout(() => {
+          loadDefaultSites();
+        }, 200);
+      }
+      notifyAllTabs();
+    });
+  });
+}
+
+function makeDefaultSitesClickable() {
+  const defaultCards = document.querySelectorAll('#defaultSitesContainer .card');
+  defaultCards.forEach(card => {
+    const checkbox = card.querySelector('input[type="checkbox"]');
+    if (!checkbox) return;
+    
+    if (card._defaultClickHandler) {
+      card.removeEventListener('click', card._defaultClickHandler);
+    }
+    
+    const clickHandler = (event) => {
+      if (isLocked) return;
+      if (event.target.closest('.delete-default-btn')) return;
+      if (event.target.closest('.switch')) return;
+      event.preventDefault();
+      checkbox.checked = !checkbox.checked;
+      checkbox.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+    
+    card._defaultClickHandler = clickHandler;
+    card.addEventListener('click', clickHandler);
+    card.style.cursor = 'pointer';
+  });
+}
+
+// ============ CUSTOM DOMAIN FUNCTIONS ============
 
 function loadCustomDomains() {
   storage.sync.get(['customDomains'], (data) => {
@@ -574,6 +761,7 @@ function createDomainCard(domain, enabled) {
   actionsDiv.style.display = 'flex';
   actionsDiv.style.alignItems = 'center';
   actionsDiv.style.gap = '8px';
+  actionsDiv.style.marginLeft = 'auto';
   
   const toggleSwitch = document.createElement('label');
   toggleSwitch.className = 'switch';
@@ -725,54 +913,6 @@ function closeDomainModal() {
   }
 }
 
-function initClickableCards() {
-  console.log("Initializing clickable cards...");
-  const clickableCards = document.querySelectorAll('.card');
-  
-  clickableCards.forEach(card => {
-    const checkbox = card.querySelector('input[type="checkbox"]');
-    if (!checkbox) return;
-    
-    if (card._clickHandler) {
-      card.removeEventListener('click', card._clickHandler);
-    }
-    
-    const clickHandler = (event) => {
-      if (isLocked) {
-        event.preventDefault();
-        event.stopPropagation();
-        return;
-      }
-      
-      let target = event.target;
-      let isSwitchElement = false;
-      
-      while (target && target !== card) {
-        if (target.classList?.contains('switch') || 
-            target.classList?.contains('slider') ||
-            target.tagName === 'LABEL' ||
-            (target.tagName === 'INPUT' && target.type === 'checkbox') ||
-            target.classList?.contains('delete-domain-btn')) {
-          isSwitchElement = true;
-          break;
-        }
-        target = target.parentNode;
-      }
-      
-      if (isSwitchElement) return;
-      
-      event.preventDefault();
-      checkbox.checked = !checkbox.checked;
-      const changeEvent = new Event('change', { bubbles: true });
-      checkbox.dispatchEvent(changeEvent);
-    };
-    
-    card._clickHandler = clickHandler;
-    card.addEventListener('click', clickHandler);
-    card.style.cursor = 'pointer';
-  });
-}
-
 function makeCustomDomainsClickable() {
   const customCards = document.querySelectorAll('.custom-domain-card');
   customCards.forEach(card => {
@@ -798,6 +938,68 @@ function makeCustomDomainsClickable() {
   });
 }
 
+function initClickableCards() {
+  const youtubeCards = document.querySelectorAll('#youtubeContent .card');
+  
+  youtubeCards.forEach(card => {
+    const checkbox = card.querySelector('input[type="checkbox"]');
+    if (!checkbox) return;
+    
+    if (card._clickHandler) {
+      card.removeEventListener('click', card._clickHandler);
+    }
+    
+    const clickHandler = (event) => {
+      if (isLocked) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+      
+      let target = event.target;
+      let isSwitchElement = false;
+      
+      while (target && target !== card) {
+        if (target.classList?.contains('switch') || 
+            target.classList?.contains('slider') ||
+            target.tagName === 'LABEL' ||
+            (target.tagName === 'INPUT' && target.type === 'checkbox')) {
+          isSwitchElement = true;
+          break;
+        }
+        target = target.parentNode;
+      }
+      
+      if (isSwitchElement) return;
+      
+      event.preventDefault();
+      checkbox.checked = !checkbox.checked;
+      const changeEvent = new Event('change', { bubbles: true });
+      checkbox.dispatchEvent(changeEvent);
+    };
+    
+    card._clickHandler = clickHandler;
+    card.addEventListener('click', clickHandler);
+    card.style.cursor = 'pointer';
+  });
+}
+
+const styleSheet = document.createElement('style');
+styleSheet.textContent = `
+  @keyframes cardFadeOut {
+    from {
+      opacity: 1;
+      transform: scale(1);
+    }
+    to {
+      opacity: 0;
+      transform: scale(0.95);
+      display: none;
+    }
+  }
+`;
+document.head.appendChild(styleSheet);
+
 let settingsModalOpen = false;
 
 function openSettingsModal() {
@@ -818,7 +1020,7 @@ function closeSettingsModal() {
 }
 
 function loadSettingsModalValues() {
-  storage.sync.get(['theme', 'hideFeedMode'], (data) => {
+  storage.sync.get(['theme', 'hideFeedMode', 'fontFamily', 'themePreset'], (data) => {
     const darkThemeBtn = document.querySelector('.toggle-option[data-theme="dark"]');
     const lightThemeBtn = document.querySelector('.toggle-option[data-theme="light"]');
     
@@ -828,6 +1030,17 @@ function loadSettingsModalValues() {
     } else {
       darkThemeBtn?.classList.add('active');
       lightThemeBtn?.classList.remove('active');
+    }
+    
+    const fontSelect = document.getElementById('fontSelect');
+    if (fontSelect && data.fontFamily) {
+      fontSelect.value = data.fontFamily;
+    }
+    
+    const themePresetSelect = document.getElementById('themePresetSelect');
+    if (themePresetSelect) {
+      const preset = data.themePreset || 'default';
+      themePresetSelect.value = preset;
     }
     
     const removeFeedBtn = document.querySelector('.toggle-option[data-feedmode="remove"]');
@@ -868,10 +1081,131 @@ function saveTheme(theme) {
   });
 }
 
+function saveFont(fontFamily) {
+  storage.sync.set({ fontFamily: fontFamily }, () => {
+    applyFontToPopup(fontFamily);
+    notifyAllTabs();
+  });
+}
+
 function saveFeedMode(mode) {
   storage.sync.set({ hideFeedMode: mode }, () => {
     notifyAllTabs();
   });
+}
+
+function resetToDefaultSettings() {
+  const defaultSettings = {
+    speed: false,
+    sidebar: false,
+    comments: false,
+    shorts: false,
+    blockYoutube: false,
+    instagram: false,
+    twitter: false,
+    tiktok: false,
+    reddit: false,
+    pinterest: false,
+    hideFeedMode: 'remove',
+    theme: 'dark',
+    themePreset: 'default',
+    fontFamily: 'system-ui',
+    customDomains: {},
+    [REMOVED_SITES_KEY]: [],
+    customPassword: null,
+    isLocked: false,
+    youtubeCollapsed: false,
+    blockCollapsed: false
+  };
+  
+  storage.sync.clear(() => {
+    storage.sync.set(defaultSettings, () => {
+      console.log('Settings reset to default');
+      
+      currentPassword = null;
+      isFirstTimeLock = true;
+      isLocked = false;
+      updateLockUI();
+      
+      allIds.forEach(id => {
+        const element = document.getElementById(id);
+        if (element) {
+          element.checked = defaultSettings[id] === true;
+        }
+      });
+      
+      loadCustomDomains();
+      loadDefaultSites();
+      
+      if (defaultSettings.theme === 'light') {
+        document.body.classList.add('light-theme');
+      } else {
+        document.body.classList.remove('light-theme');
+      }
+      
+      applyFontToPopup(defaultSettings.fontFamily);
+      applyThemePreset(defaultSettings.themePreset);
+      
+      const removeFeedBtn = document.querySelector('.toggle-option[data-feedmode="remove"]');
+      const hideFeedBtn = document.querySelector('.toggle-option[data-feedmode="hide"]');
+      const settingsModeDescription = document.getElementById('settingsModeDescription');
+      
+      if (defaultSettings.hideFeedMode === 'hide') {
+        hideFeedBtn?.classList.add('active');
+        removeFeedBtn?.classList.remove('active');
+        if (settingsModeDescription) {
+          settingsModeDescription.textContent = 'Hide Mode: Hides feed but keeps original video size';
+        }
+      } else {
+        removeFeedBtn?.classList.add('active');
+        hideFeedBtn?.classList.remove('active');
+        if (settingsModeDescription) {
+          settingsModeDescription.textContent = 'Remove Mode: Removes feed and expands video to full width';
+        }
+      }
+      
+      const confirmModal = document.getElementById('confirmResetModal');
+      if (confirmModal) confirmModal.style.display = 'none';
+      
+      closeSettingsModal();
+      notifyAllTabs();
+    });
+  });
+}
+
+function showConfirmResetModal() {
+  const confirmModal = document.getElementById('confirmResetModal');
+  if (!confirmModal) return;
+  
+  confirmModal.style.display = 'flex';
+  
+  const cancelBtn = document.getElementById('confirmResetCancelBtn');
+  const confirmBtn = document.getElementById('confirmResetOkBtn');
+  
+  const newCancelBtn = cancelBtn?.cloneNode(true);
+  const newConfirmBtn = confirmBtn?.cloneNode(true);
+  
+  if (cancelBtn && newCancelBtn) {
+    cancelBtn.parentNode?.replaceChild(newCancelBtn, cancelBtn);
+    newCancelBtn.addEventListener('click', () => {
+      confirmModal.style.display = 'none';
+    });
+  }
+  
+  if (confirmBtn && newConfirmBtn) {
+    confirmBtn.parentNode?.replaceChild(newConfirmBtn, confirmBtn);
+    newConfirmBtn.addEventListener('click', () => {
+      resetToDefaultSettings();
+    });
+  }
+  
+  const closeOnOutside = (e) => {
+    if (e.target === confirmModal) {
+      confirmModal.style.display = 'none';
+      document.removeEventListener('click', closeOnOutside);
+    }
+  };
+  document.addEventListener('click', closeOnOutside);
 }
 
 function setupSettingsModal() {
@@ -881,6 +1215,27 @@ function setupSettingsModal() {
   const settingsVersion = document.getElementById('settingsVersion');
   if (settingsVersion) {
     settingsVersion.textContent = CURRENT_VERSION;
+  }
+  
+  const githubVersionLink = document.getElementById('githubVersionLink');
+  if (githubVersionLink) {
+    githubVersionLink.textContent = 'Loading...';
+    fetch('https://api.github.com/repos/reapertakumi/YouTube-Study-Enhancer/releases/latest')
+      .then(response => {
+        if (!response.ok) throw new Error('Network response was not ok');
+        return response.json();
+      })
+      .then(data => {
+        if (data && data.tag_name) {
+          githubVersionLink.textContent = data.tag_name;
+        } else {
+          githubVersionLink.textContent = 'Not found';
+        }
+      })
+      .catch(error => {
+        console.error('Error fetching GitHub version:', error);
+        githubVersionLink.textContent = 'Error loading';
+      });
   }
   
   if (closeSettingsBtn) {
@@ -913,6 +1268,20 @@ function setupSettingsModal() {
         darkThemeBtn?.classList.remove('active');
         saveTheme('light');
       }
+    });
+  }
+  
+  const themePresetSelect = document.getElementById('themePresetSelect');
+  if (themePresetSelect) {
+    themePresetSelect.addEventListener('change', (e) => {
+      applyThemePreset(e.target.value);
+    });
+  }
+  
+  const fontSelect = document.getElementById('fontSelect');
+  if (fontSelect) {
+    fontSelect.addEventListener('change', (e) => {
+      saveFont(e.target.value);
     });
   }
   
@@ -953,6 +1322,13 @@ function setupSettingsModal() {
     });
   }
   
+  const revertToDefaultBtn = document.getElementById('revertToDefaultBtn');
+  if (revertToDefaultBtn) {
+    revertToDefaultBtn.addEventListener('click', () => {
+      showConfirmResetModal();
+    });
+  }
+  
   const tabBtns = document.querySelectorAll('.settings-tab-btn');
   tabBtns.forEach(btn => {
     btn.addEventListener('click', () => {
@@ -964,8 +1340,8 @@ function setupSettingsModal() {
       const tabContents = document.querySelectorAll('.settings-tab-content');
       tabContents.forEach(content => content.classList.remove('active'));
       
-      if (tabName === 'basic') {
-        document.getElementById('basicTab').classList.add('active');
+      if (tabName === 'general') {
+        document.getElementById('generalTab').classList.add('active');
       } else if (tabName === 'youtube') {
         document.getElementById('youtubeTab').classList.add('active');
       }

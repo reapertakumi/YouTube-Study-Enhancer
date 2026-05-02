@@ -15,6 +15,10 @@ let isInitialized = false;
 let feedOriginalDisplay = null;
 let resizeTimeout = null;
 let shortsStyleElement = null;
+let feedStyleApplied = false;
+
+let lastApplyTime = 0;
+let applyThrottleTimer = null;
 
 const storage = (typeof chrome !== 'undefined' && chrome.storage) ? chrome.storage : browser.storage;
 
@@ -30,8 +34,10 @@ storage.sync.get(["shorts", "speed", "sidebar", "comments", "hideFeedMode"], dat
   }
 });
 
-// Listen for setting changes - optimized
+// Listen for setting changes - optimized with throttle
 let updateTimeout = null;
+let lastUpdateTime = 0;
+
 storage.onChanged.addListener(changes => {
   let needsUpdate = false;
   Object.keys(changes).forEach(key => {
@@ -41,12 +47,24 @@ storage.onChanged.addListener(changes => {
       console.log(`Setting changed: ${key} = ${changes[key].newValue}`);
     }
   });
+  
   if (needsUpdate) {
     if (updateTimeout) clearTimeout(updateTimeout);
-    updateTimeout = setTimeout(() => {
-      console.log("Settings updated, reapplying:", settings);
-      applyAllFeatures();
-    }, 50);
+    
+    const now = Date.now();
+    if (now - lastUpdateTime < 200) {
+      updateTimeout = setTimeout(() => {
+        lastUpdateTime = Date.now();
+        console.log("Settings updated, reapplying (delayed):", settings);
+        applyAllFeatures();
+      }, 150);
+    } else {
+      lastUpdateTime = now;
+      updateTimeout = setTimeout(() => {
+        console.log("Settings updated, reapplying:", settings);
+        applyAllFeatures();
+      }, 50);
+    }
   }
 });
 
@@ -73,6 +91,13 @@ function init() {
 }
 
 function applyAllFeatures() {
+  // THROTTLE: Don't run more than once every 300ms
+  const now = Date.now();
+  if (now - lastApplyTime < 300) {
+    return;
+  }
+  lastApplyTime = now;
+  
   console.log("Applying all features - settings:", settings);
   hideShorts();
   handleVideoFeed();
@@ -149,7 +174,6 @@ function hideShorts() {
 
 // ============ VIDEO FEED HANDLING ============
 function findFeedElement() {
-  // Try all possible YouTube feed selectors
   const selectors = [
     '#secondary',
     '#secondary.style-scope.ytd-watch-flexy',
@@ -158,27 +182,16 @@ function findFeedElement() {
     '#related',
     'ytd-watch-next-secondary-results-renderer',
     '#related.ytd-watch-flexy',
-    'div#secondary',
-    'ytd-two-column-browse-results-renderer #secondary',
-    'ytd-watch-flexy div#secondary'
+    'div#secondary'
   ];
   
   for (const selector of selectors) {
     const element = document.querySelector(selector);
     if (element) {
-      console.log("Found feed element with selector:", selector);
       return element;
     }
   }
   
-  // Fallback: try to find any sidebar-like element
-  const possibleFeed = document.querySelector('[id*="secondary"], [id*="related"], [id*="sidebar"]');
-  if (possibleFeed) {
-    console.log("Found feed element via fallback:", possibleFeed.id);
-    return possibleFeed;
-  }
-  
-  console.log("No feed element found");
   return null;
 }
 
@@ -212,35 +225,12 @@ function applyFullWidthToVideo() {
     primary.style.paddingRight = '0';
   }
   
-  // Make video container full width
-  const videoContainers = [
-    '#player-container-outer',
-    '#player-container',
-    '#movie_player',
-    '.html5-video-player',
-    '#player-container-inner',
-    '#ytd-player',
-    '.ytp-player-wrapper'
-  ];
-  
-  videoContainers.forEach(selector => {
-    const elements = document.querySelectorAll(selector);
-    elements.forEach(el => {
-      if (el) {
-        el.style.width = '100%';
-        el.style.maxWidth = '100%';
-      }
-    });
-  });
-  
-  // Force YouTube's flex layout to expand
   const watchFlexy = document.querySelector('ytd-watch-flexy');
   if (watchFlexy) {
     watchFlexy.style.setProperty('--ytd-watch-flexy-secondary-width', '0px', 'important');
     watchFlexy.style.setProperty('--ytd-watch-flexy-primary-width', '100%', 'important');
   }
   
-  // Add style for full width
   let style = document.getElementById('study-enhancer-fullwidth');
   if (!style) {
     style = document.createElement('style');
@@ -276,26 +266,6 @@ function restoreOriginalVideoWidth() {
     primary.style.paddingRight = '';
   }
   
-  const videoContainers = [
-    '#player-container-outer',
-    '#player-container',
-    '#movie_player',
-    '.html5-video-player',
-    '#player-container-inner',
-    '#ytd-player',
-    '.ytp-player-wrapper'
-  ];
-  
-  videoContainers.forEach(selector => {
-    const elements = document.querySelectorAll(selector);
-    elements.forEach(el => {
-      if (el) {
-        el.style.width = '';
-        el.style.maxWidth = '';
-      }
-    });
-  });
-  
   const watchFlexy = document.querySelector('ytd-watch-flexy');
   if (watchFlexy) {
     watchFlexy.style.removeProperty('--ytd-watch-flexy-secondary-width');
@@ -307,54 +277,40 @@ function restoreOriginalVideoWidth() {
 }
 
 function handleVideoFeed() {
-  console.log("handleVideoFeed called - sidebar:", settings.sidebar, "mode:", settings.hideFeedMode);
-  
   if (!settings.sidebar) {
     restoreVideoFeed();
     return;
   }
   
   if (settings.hideFeedMode === "remove") {
-    console.log("Applying REMOVE mode");
     applyRemoveMode();
   } else {
-    console.log("Applying HIDE mode");
     applyHideMode();
-  }
-  
-  // Hide fullscreen grid if present
-  const fullscreenGrid = document.querySelector('.ytp-fullscreen-grid-stills-container');
-  if (fullscreenGrid) {
-    fullscreenGrid.style.display = 'none';
   }
 }
 
 function applyRemoveMode() {
   const feed = findFeedElement();
-  if (!feed) {
-    console.log("Feed element not found for remove mode");
+  if (!feed) return;
+  
+  // Check if already applied
+  if (feed.style.display === 'none' && feedOriginalDisplay !== null) {
     return;
   }
   
-  console.log("Apply remove mode - hiding feed completely");
+  console.log("Remove mode: Setting feed display to none");
   
-  // Clear any previous visibility/opacity styles
   feed.style.visibility = '';
   feed.style.opacity = '';
   feed.style.pointerEvents = '';
   
-  // Store original display if needed
   if (feedOriginalDisplay === null) {
     storeFeedDisplay(feed);
   }
   
-  // Hide the feed
   feed.style.display = 'none';
-  
-  // Expand video to full width
   applyFullWidthToVideo();
   
-  // Trigger resize to fix any layout issues
   if (resizeTimeout) clearTimeout(resizeTimeout);
   resizeTimeout = setTimeout(() => {
     window.dispatchEvent(new Event('resize'));
@@ -363,54 +319,50 @@ function applyRemoveMode() {
 
 function applyHideMode() {
   const feed = findFeedElement();
-  if (!feed) {
-    console.log("Feed element not found for hide mode");
+  if (!feed) return;
+  
+  // Check if already applied
+  if (feed.style.visibility === 'hidden' && feedOriginalDisplay !== null) {
     return;
   }
   
-  console.log("Apply hide mode - making feed invisible but keeping space");
+  console.log("Hide mode: Setting feed visibility to hidden");
   
-  // Store original display if needed
   if (feedOriginalDisplay === null) {
     storeFeedDisplay(feed);
   }
   
-  // Restore display if it was set to none
+  // Restore display first if it was hidden by remove mode
   if (feed.style.display === 'none') {
     feed.style.display = feedOriginalDisplay || '';
   }
   
-  // Hide visually but keep layout space
   feed.style.visibility = 'hidden';
   feed.style.opacity = '0';
   feed.style.pointerEvents = 'none';
   
-  // Don't expand video - keep original size
   restoreOriginalVideoWidth();
 }
 
 function restoreVideoFeed() {
   const feed = findFeedElement();
-  if (!feed) {
-    console.log("Feed element not found for restore");
+  if (!feed) return;
+  
+  // Check if already restored
+  if (feed.style.display !== 'none' && feed.style.visibility !== 'hidden') {
     return;
   }
   
   console.log("Restoring video feed");
   
-  // Restore all feed styles
   feed.style.display = feedOriginalDisplay || '';
   feed.style.visibility = '';
   feed.style.opacity = '';
   feed.style.pointerEvents = '';
   
-  // Restore original video width
   restoreOriginalVideoWidth();
-  
-  // Reset stored display
   feedOriginalDisplay = null;
   
-  // Trigger resize
   if (resizeTimeout) clearTimeout(resizeTimeout);
   resizeTimeout = setTimeout(() => {
     window.dispatchEvent(new Event('resize'));
@@ -493,23 +445,39 @@ function handleSpeed() {
 
 // ============ WATCH FOR NAVIGATION (optimized - minimal impact) ============
 function startObservers() {
-  let lastUrl = location.href;
-  let urlChangeTimer = null;
+  // Prevent duplicate observer initialization
+  if (window.__studyEnhancerObserversStarted) {
+    console.log("Observers already started, skipping duplicate initialization");
+    return;
+  }
+  window.__studyEnhancerObserversStarted = true;
   
-  // Watch for URL changes (SPA navigation)
-  const urlObserver = new MutationObserver(() => {
-    const url = location.href;
-    if (url !== lastUrl && url.includes('youtube.com')) {
-      console.log("URL changed from", lastUrl, "to", url);
-      lastUrl = url;
-      if (urlChangeTimer) clearTimeout(urlChangeTimer);
-      urlChangeTimer = setTimeout(() => {
-        feedOriginalDisplay = null; // Reset feed display cache
-        applyAllFeatures();
-      }, 300);
+  let urlChangeTimer = null;
+  let isApplyingThrottle = false;
+  
+  // Throttled apply function - prevents rapid successive calls
+  const throttledApply = () => {
+    if (isApplyingThrottle) return;
+    isApplyingThrottle = true;
+    
+    setTimeout(() => {
+      applyAllFeatures();
+      isApplyingThrottle = false;
+    }, 100);
+  };
+  
+  // Use setInterval for URL checking (much more efficient)
+  let lastKnownUrl = location.href;
+  
+  setInterval(() => {
+    const currentUrl = location.href;
+    if (currentUrl !== lastKnownUrl && currentUrl.includes('youtube.com')) {
+      console.log("URL changed from", lastKnownUrl, "to", currentUrl);
+      lastKnownUrl = currentUrl;
+      feedOriginalDisplay = null;
+      throttledApply();
     }
-  });
-  urlObserver.observe(document, { subtree: true, childList: true });
+  }, 500);
   
   // YouTube's custom navigation event
   document.addEventListener('yt-navigate-finish', () => {
@@ -517,25 +485,38 @@ function startObservers() {
     if (urlChangeTimer) clearTimeout(urlChangeTimer);
     urlChangeTimer = setTimeout(() => {
       feedOriginalDisplay = null;
-      applyAllFeatures();
-    }, 300);
-  });
-  
-  // Watch for dynamic content changes (but not too aggressive)
-  let mutationTimer = null;
-  const contentObserver = new MutationObserver(() => {
-    if (mutationTimer) clearTimeout(mutationTimer);
-    mutationTimer = setTimeout(() => {
-      // Only reapply if we're on a YouTube page
-      if (window.location.href.includes('youtube.com')) {
-        // Check if feed or video elements exist
-        if (document.querySelector("#secondary") || document.querySelector("#comments") || document.querySelector("video")) {
-          applyAllFeatures();
-        }
-      }
+      throttledApply();
     }, 200);
   });
-  contentObserver.observe(document.body, { childList: true, subtree: true });
+  
+  // Use requestIdleCallback for idle checks (much more efficient)
+  let lastCheckTime = 0;
+  
+  const idleCheck = () => {
+    const now = Date.now();
+    if (now - lastCheckTime > 2000) {
+      lastCheckTime = now;
+      if (window.location.href.includes('youtube.com')) {
+        if (document.querySelector("#secondary") || document.querySelector("#comments") || document.querySelector("video")) {
+          throttledApply();
+        }
+      }
+    }
+    
+    if ('requestIdleCallback' in window) {
+      requestIdleCallback(idleCheck, { timeout: 3000 });
+    } else {
+      setTimeout(idleCheck, 2000);
+    }
+  };
+  
+  if ('requestIdleCallback' in window) {
+    requestIdleCallback(idleCheck, { timeout: 3000 });
+  } else {
+    setTimeout(idleCheck, 2000);
+  }
+  
+  console.log("Observers started successfully (optimized mode)");
 }
 
 // ============ INITIALIZE ============

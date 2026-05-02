@@ -10,6 +10,7 @@ chrome.runtime.onInstalled.addListener((details) => {
     chrome.storage.sync.set({
       speed: false,
       sidebar: false,
+      endcard: false,
       comments: false,
       shorts: false,
       blockYoutube: false,
@@ -23,11 +24,8 @@ chrome.runtime.onInstalled.addListener((details) => {
     });
   } else if (details.reason === 'update') {
     console.log(`Extension updated from ${details.previousVersion} to ${CURRENT_VERSION}`);
-    // No notification - just log
   }
 });
-
-// showUpdateNotification function removed
 
 async function injectBlocker(tabId, url) {
   if (!url || url.startsWith('chrome://') || url.startsWith('edge://') || url.startsWith('about:') || url.startsWith('chrome-extension://')) {

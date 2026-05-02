@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Study Mode | Focus Flow</title>
+  <link rel="stylesheet" href="blocker.css">
+</head>
+<body>
+
+<div id="settingsToggle" class="settings-toggle" aria-label="Settings">
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 28px; height: 28px;">
+    <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z" />
+    <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+  </svg>
+</div>
+
+<div class="light-wrapper">
+  <div class="light light-main"></div>
+  <div class="light light-secondary"></div>
+</div>
+
+<div class="noise"></div>
+<div class="custom-overlay"></div>
+<div class="overlay"></div>
+
+<div class="content">
+  <div class="title-block">
+    <div id="icon" class="icon">🌊</div>
+    <h1 class="wave-text" id="waveTitle"></h1>
+  </div>
+  <p class="subtitle">
+    This space is temporarily cleared to help you focus.
+  </p>
+</div>
+
+<!-- Sticky Note -->
+<div class="sticky-note-container" id="stickyNoteContainer" style="display: none;">
+  <div class="sticky-note" id="stickyNote">
+    <div class="pin"></div>
+    <div class="sticky-header">
+      <span class="sticky-title">📝 To-Do List</span>
+      <div class="note-controls">
+        <button class="note-btn" id="clearAllTodos" title="Clear all todos">🗑</button>
+        <button class="close-sticky-btn" id="closeStickyBtn" title="Close">✕</button>
+      </div>
+    </div>
+    <div class="sticky-content">
+      <ul class="todo-list" id="todoList"></ul>
+      <div class="add-todo-container">
+        <input type="text" class="add-todo-input" id="newTodoInput" placeholder="Add a new task..." maxlength="100">
+        <button class="add-todo-btn" id="addTodoBtn">+ Add</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Music Player -->
+<div class="music-player">
+  <div class="now-playing" id="nowPlaying">
+    <span id="artistName">Artist</span> - <span id="songName">Song Name</span>
+  </div>
+  <div class="player-controls">
+    <button id="prevBtn" class="control-btn" title="Previous">⏮</button>
+    <button id="playPauseBtn" class="control-btn" title="Play/Pause">▶</button>
+    <button id="nextBtn" class="control-btn" title="Next">⏭</button>
+    <div class="volume-slider-container">
+      <span class="volume-icon">🔊</span>
+      <input type="range" id="volumeSlider" class="volume-slider" min="0" max="100" value="70">
+    </div>
+  </div>
+  <div class="progress-container">
+    <span class="time-current" id="timeCurrent">0:00</span>
+    <div class="progress-bar" id="progressBar">
+      <div class="progress-fill" id="progressFill"></div>
+    </div>
+    <span class="time-total" id="timeTotal">0:00</span>
+  </div>
+</div>
+
+<!-- Bottom Left Action Buttons -->
+<div class="action-buttons">
+  <button id="soundBtn" class="action-btn" title="Sound">
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 24px; height: 24px;">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M19.114 5.636a9 9 0 0 1 0 12.728M16.463 8.288a5.25 5.25 0 0 1 0 7.424M6.75 8.25l4.72-4.72a.75.75 0 0 1 1.28.53v15.88a.75.75 0 0 1-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.009 9.009 0 0 1 2.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75Z" />
+    </svg>
+  </button>
+  <button id="toolBtn" class="action-btn" title="Tools">
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 24px; height: 24px;">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 1 1-3 0m3 0a1.5 1.5 0 1 0-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-9.75 0h9.75" />
+    </svg>
+  </button>
+</div>
+
+<!-- Tool Popup Panel -->
+<div id="toolPopup" class="tool-popup">
+  <div class="tool-panel">
+    <button id="toggleTodosBtn" class="tool-btn">📝 To-Dos</button>
+    <button id="pomodoroBtn" class="tool-btn">⏱️ Pomodoro Timer</button>
+  </div>
+</div>
+
+<!-- Pomodoro Timer Popup -->
+<div id="pomodoroPopup" class="pomodoro-popup">
+  <div class="pomodoro-panel">
+    <div class="pomodoro-header-icons">
+      <button class="pomodoro-settings-icon" id="pomodoroSettingsIcon" title="Timer Settings">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 18px; height: 18px;">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z" />
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+        </svg>
+      </button>
+      <button class="close-panel-btn" id="closePomodoroBtn">✕</button>
+    </div>
+    <div class="pomodoro-title">FOCUS TIMER</div>
+    <div class="pomodoro-time" id="pomodoroTimeDisplay">25:00</div>
+    <div class="pomodoro-phase" id="pomodoroPhase">Focus Time</div>
+    <div class="pomodoro-buttons">
+      <button id="pomodoroStartBtn" class="pomodoro-btn primary">▶ Start</button>
+      <button id="pomodoroPauseBtn" class="pomodoro-btn">⏸ Pause</button>
+      <button id="pomodoroResetBtn" class="pomodoro-btn">🔄 Reset</button>
+    </div>
+  </div>
+</div>
+
+<!-- Pomodoro Settings Popup -->
+<div id="pomodoroSettingsPopup" class="pomodoro-settings-popup">
+  <div class="pomodoro-settings-panel">
+    <div class="pomodoro-settings-title">⏱️ Timer Settings</div>
+    <div class="pomodoro-settings-group">
+      <label>Focus Duration (minutes)</label>
+      <input type="number" id="focusDurationInput" class="pomodoro-settings-input" min="1" max="999" value="25">
+    </div>
+    <div class="pomodoro-settings-group">
+      <label>Break Duration (minutes)</label>
+      <input type="number" id="breakDurationInput" class="pomodoro-settings-input" min="1" max="999" value="5">
+    </div>
+    <div class="pomodoro-settings-buttons">
+      <button id="savePomodoroSettings" class="pomodoro-settings-btn save">Save</button>
+      <button id="cancelPomodoroSettings" class="pomodoro-settings-btn cancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Ambient Sound Mixer Popup -->
+<div id="ambientPopup" class="ambient-popup">
+  <div class="ambient-panel">
+    <button class="close-ambient-btn" id="closeAmbientBtn">✕</button>
+    <div class="ambient-title">🌿 Ambient Sound Mixer</div>
+    <div class="ambient-sound-list">
+      <div class="ambient-sound-item" data-sound="fireplace">
+        <span class="sound-icon">🔥</span>
+        <div class="sound-info">
+          <div class="sound-name">Fireplace</div>
+          <input type="range" class="sound-volume-slider" min="0" max="100" value="50" disabled>
+        </div>
+        <div class="sound-toggle" data-sound="fireplace"></div>
+      </div>
+      <div class="ambient-sound-item" data-sound="wind">
+        <span class="sound-icon">💨</span>
+        <div class="sound-info">
+          <div class="sound-name">Wind</div>
+          <input type="range" class="sound-volume-slider" min="0" max="100" value="50" disabled>
+        </div>
+        <div class="sound-toggle" data-sound="wind"></div>
+      </div>
+      <div class="ambient-sound-item" data-sound="nature">
+        <span class="sound-icon">🌲</span>
+        <div class="sound-info">
+          <div class="sound-name">Birds & Nature</div>
+          <input type="range" class="sound-volume-slider" min="0" max="100" value="50" disabled>
+        </div>
+        <div class="sound-toggle" data-sound="nature"></div>
+      </div>
+      <div class="ambient-sound-item" data-sound="rain">
+        <span class="sound-icon">🌧️</span>
+        <div class="sound-info">
+          <div class="sound-name">Rain</div>
+          <input type="range" class="sound-volume-slider" min="0" max="100" value="50" disabled>
+        </div>
+        <div class="sound-toggle" data-sound="rain"></div>
+      </div>
+      <div class="ambient-sound-item" data-sound="thunder">
+        <span class="sound-icon">⛈️</span>
+        <div class="sound-info">
+          <div class="sound-name">Thunder</div>
+          <input type="range" class="sound-volume-slider" min="0" max="100" value="50" disabled>
+        </div>
+        <div class="sound-toggle" data-sound="thunder"></div>
+      </div>
+      <div class="ambient-sound-item" data-sound="waves">
+        <span class="sound-icon">🌊</span>
+        <div class="sound-info">
+          <div class="sound-name">Ocean Waves</div>
+          <input type="range" class="sound-volume-slider" min="0" max="100" value="50" disabled>
+        </div>
+        <div class="sound-toggle" data-sound="waves"></div>
+      </div>
+    </div>
+    <div class="master-volume-container">
+      <div class="master-volume-label">
+        <span>Master Volume</span>
+        <span id="masterVolumeValue">70%</span>
+      </div>
+      <input type="range" id="masterVolumeSlider" class="master-volume-slider" min="0" max="100" value="70">
+    </div>
+  </div>
+</div>
+
+<!-- SETTINGS UI -->
+<div id="settings" class="settings hidden">
+  <div class="settings-box">
+    <div id="closeSettings" class="close-settings">✕</div>
+    <h2 class="settings-title">Ambience Studio</h2>
+    <div class="settings-sub">personalize your focus zone</div>
+
+    <div class="section-title">Text Animation</div>
+    
+    <label class="setting-group">
+      <span>Animation Speed</span>
+      <div class="text-speed-row">
+        <button id="speedNone" class="speed-btn active">None</button>
+        <button id="speedSlow" class="speed-btn">Slow</button>
+        <button id="speedMedium" class="speed-btn">Medium</button>
+        <button id="speedFast" class="speed-btn">Fast</button>
+      </div>
+    </label>
+
+    <div class="divider"></div>
+
+    <div class="section-title">Main Light</div>
+    
+    <label class="setting-group">
+      <span>Color</span>
+      <input type="color" id="mainColor" value="#a855f7">
+    </label>
+
+    <label class="setting-group">
+      <span>Position</span>
+      <select id="mainPosition">
+        <option value="center">Centered (calm)</option>
+        <option value="top-left">Top Left</option>
+        <option value="top-right">Top Right</option>
+        <option value="bottom-left">Bottom Left</option>
+        <option value="bottom-right">Bottom Right</option>
+      </select>
+    </label>
+
+    <div class="light-size-slider">
+      <label>Light Size</label>
+      <input type="range" id="mainLightSize" min="100" max="400" value="400">
+      <div class="size-value" id="mainLightSizeValue">100%</div>
+    </div>
+
+    <div class="divider"></div>
+
+    <label class="setting-group checkbox-row">
+      <span>Activate Secondary Light</span>
+      <input type="checkbox" id="toggleLight">
+    </label>
+
+    <div id="secondLightSettings" class="second-light-settings hidden">
+      <div class="section-title">Secondary Orb</div>
+
+      <label class="setting-group">
+        <span>Color</span>
+        <input type="color" id="secondColor" value="#c4b5fd">
+      </label>
+
+      <div class="light-size-slider">
+        <label>Secondary Light Size</label>
+        <input type="range" id="secondLightSize" min="200" max="800" value="800">
+        <div class="size-value" id="secondLightSizeValue">100%</div>
+      </div>
+
+      <div class="movement-row">
+        <label class="setting-group movement-control">
+          <span>Animation Flow</span>
+          <select id="movementType">
+            <option value="none">Static (snap to corner)</option>
+            <option value="bounce">Smooth Bounce</option>
+            <option value="orbit">Orbit Dance</option>
+          </select>
+        </label>
+        <button id="cornerBtn" class="corner-btn" type="button" title="Cycle corner position">↻</button>
+      </div>
+
+      <label class="setting-group">
+        <span>Speed</span>
+        <input type="range" id="speedControl" min="0" max="100" value="20">
+        <div class="slider-labels">
+          <span>Slow</span>
+          <span>Fast</span>
+        </div>
+      </label>
+    </div>
+
+    <button id="applyBtn" type="button">Apply &amp; Save</button>
+  </div>
+</div>
+
+<script src="blocker_ui.js"></script>
+</body>
+</html>
