@@ -1,4 +1,400 @@
 (function() {
+  // ===== ROBUST AUDIO DOWNLOAD MANAGER =====
+  const GITHUB_BASE = 'https://raw.githubusercontent.com/reapertakumi/YouTube-Study-Enhancer/main';
+  const DB_NAME = 'StudyEnhancerAudio';
+  const DB_VERSION = 1;
+  const STORE_NAME = 'audioFiles';
+  
+  const AUDIO_FILES = {
+    music: [
+      { name: "fassounds-good-night-lofi-cozy-chill-music-160166.opus", url: `${GITHUB_BASE}/music/fassounds-good-night-lofi-cozy-chill-music-160166.opus` },
+      { name: "fassounds-lofi-study-calm-peaceful-chill-hop-112191.opus", url: `${GITHUB_BASE}/music/fassounds-lofi-study-calm-peaceful-chill-hop-112191.opus` },
+      { name: "lofidreams-cozy-lofi-background-music-457199.opus", url: `${GITHUB_BASE}/music/lofidreams-cozy-lofi-background-music-457199.opus` },
+      { name: "lofidreams-lofi-jazz-music-485312.opus", url: `${GITHUB_BASE}/music/lofidreams-lofi-jazz-music-485312.opus` },
+      { name: "lofi_music_library-coffee-lofi-chill-lofi-ambient-458901.opus", url: `${GITHUB_BASE}/music/lofi_music_library-coffee-lofi-chill-lofi-ambient-458901.opus` },
+      { name: "lofi_music_library-lofi-girl-chill-lofi-beats-lofi-ambient-461871.opus", url: `${GITHUB_BASE}/music/lofi_music_library-lofi-girl-chill-lofi-beats-lofi-ambient-461871.opus` },
+      { name: "lofi_music_library-lofi-rain-lofi-music-458077.opus", url: `${GITHUB_BASE}/music/lofi_music_library-lofi-rain-lofi-music-458077.opus` },
+      { name: "mondamusic-lofi-chill-chill-512854.opus", url: `${GITHUB_BASE}/music/mondamusic-lofi-chill-chill-512854.opus` },
+      { name: "mondamusic-lofi-lofi-chill-lofi-girl-491690.opus", url: `${GITHUB_BASE}/music/mondamusic-lofi-lofi-chill-lofi-girl-491690.opus` },
+      { name: "mondamusic-lofi-lofi-girl-lofi-chill-512853.opus", url: `${GITHUB_BASE}/music/mondamusic-lofi-lofi-girl-lofi-chill-512853.opus` },
+      { name: "sonican-lo-fi-music-loop-sentimental-jazzy-love-473154.opus", url: `${GITHUB_BASE}/music/sonican-lo-fi-music-loop-sentimental-jazzy-love-473154.opus` },
+      { name: "watermello-lofi-chill-lofi-girl-lofi-488388.opus", url: `${GITHUB_BASE}/music/watermello-lofi-chill-lofi-girl-lofi-488388.opus` },
+      { name: "watermello-lofi-lofi-girl-lofi-chill-484610.opus", url: `${GITHUB_BASE}/music/watermello-lofi-lofi-girl-lofi-chill-484610.opus` }
+    ],
+    sounds: [
+      { name: "fireplace.opus", url: `${GITHUB_BASE}/sounds/fireplace.opus` },
+      { name: "wind.opus", url: `${GITHUB_BASE}/sounds/wind.opus` },
+      { name: "bird.opus", url: `${GITHUB_BASE}/sounds/bird.opus` },
+      { name: "rain.opus", url: `${GITHUB_BASE}/sounds/rain.opus` },
+      { name: "thunder.opus", url: `${GITHUB_BASE}/sounds/thunder.opus` },
+      { name: "ocean.opus", url: `${GITHUB_BASE}/sounds/ocean.opus` },
+      { name: "break.opus", url: `${GITHUB_BASE}/sounds/break.opus` }
+    ]
+  };
+  
+  let db = null;
+  let isDownloading = false;
+  let popupElement = null;
+  let pendingCallback = null;
+  
+  // Open IndexedDB
+  function openDatabase() {
+    return new Promise((resolve, reject) => {
+      if (db && db.name === DB_NAME) {
+        resolve(db);
+        return;
+      }
+      
+      const request = indexedDB.open(DB_NAME, DB_VERSION);
+      
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        db = request.result;
+        resolve(db);
+      };
+      
+      request.onupgradeneeded = (event) => {
+        const database = event.target.result;
+        if (!database.objectStoreNames.contains(STORE_NAME)) {
+          database.createObjectStore(STORE_NAME, { keyPath: 'fileName' });
+        }
+      };
+    });
+  }
+  
+  // Check if audio is downloaded
+  async function isAudioDownloaded() {
+    try {
+      await openDatabase();
+      const transaction = db.transaction([STORE_NAME], 'readonly');
+      const store = transaction.objectStore(STORE_NAME);
+      const totalFiles = AUDIO_FILES.music.length + AUDIO_FILES.sounds.length;
+      
+      return new Promise((resolve) => {
+        const countRequest = store.count();
+        countRequest.onsuccess = () => resolve(countRequest.result >= totalFiles);
+        countRequest.onerror = () => resolve(false);
+      });
+    } catch (error) {
+      return false;
+    }
+  }
+  
+  // Save file to IndexedDB
+  async function saveToIndexedDB(fileName, blob) {
+    await openDatabase();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction([STORE_NAME], 'readwrite');
+      const store = transaction.objectStore(STORE_NAME);
+      const request = store.put({ fileName: fileName, blob: blob, timestamp: Date.now() });
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  }
+  
+  // Get file from IndexedDB
+  async function getFromIndexedDB(fileName) {
+    await openDatabase();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction([STORE_NAME], 'readonly');
+      const store = transaction.objectStore(STORE_NAME);
+      const request = store.get(fileName);
+      request.onsuccess = () => resolve(request.result ? request.result.blob : null);
+      request.onerror = () => reject(request.error);
+    });
+  }
+  
+  // Download a single file with retry logic
+  async function downloadFileWithRetry(file, maxRetries = 3) {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`Downloading ${file.name} (attempt ${attempt}/${maxRetries})`);
+        
+        const response = await fetch(file.url, {
+          cache: 'no-store',
+          headers: { 'Cache-Control': 'no-cache' }
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        
+        const blob = await response.blob();
+        
+        if (blob.size < 1000) {
+          throw new Error('File too small - likely an error page');
+        }
+        
+        await saveToIndexedDB(file.name, blob);
+        console.log(`Successfully downloaded ${file.name} (${blob.size} bytes)`);
+        return { success: true, fileName: file.name };
+        
+      } catch (error) {
+        console.error(`Attempt ${attempt} failed for ${file.name}:`, error);
+        
+        if (attempt === maxRetries) {
+          return { success: false, fileName: file.name, error: error.message };
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+      }
+    }
+    return { success: false, fileName: file.name, error: 'Max retries exceeded' };
+  }
+  
+  // Download all files with progress
+  async function downloadAllFiles(onProgress, onComplete, onError) {
+    if (isDownloading) {
+      if (onError) onError('Download already in progress');
+      return;
+    }
+    
+    isDownloading = true;
+    const allFiles = [...AUDIO_FILES.music, ...AUDIO_FILES.sounds];
+    let completed = 0;
+    let failed = 0;
+    const failedFiles = [];
+    
+    for (let i = 0; i < allFiles.length; i++) {
+      const file = allFiles[i];
+      
+      if (onProgress) {
+        onProgress({
+          current: i + 1,
+          total: allFiles.length,
+          fileName: file.name,
+          status: 'downloading'
+        });
+      }
+      
+      const result = await downloadFileWithRetry(file);
+      
+      if (result.success) {
+        completed++;
+        if (onProgress) {
+          onProgress({
+            current: completed,
+            total: allFiles.length,
+            fileName: file.name,
+            status: 'completed'
+          });
+        }
+      } else {
+        failed++;
+        failedFiles.push(result.fileName);
+        if (onProgress) {
+          onProgress({
+            current: completed + failed,
+            total: allFiles.length,
+            fileName: file.name,
+            status: 'failed',
+            error: result.error
+          });
+        }
+      }
+    }
+    
+    isDownloading = false;
+    
+    if (failed === 0) {
+      if (onComplete) onComplete(completed, allFiles.length);
+    } else {
+      if (onError) onError(`Failed to download ${failed} files: ${failedFiles.join(', ')}`);
+    }
+  }
+  
+  // Create audio URL from blob
+  async function getAudioUrl(fileName) {
+    const blob = await getFromIndexedDB(fileName);
+    if (blob) {
+      return URL.createObjectURL(blob);
+    }
+    return null;
+  }
+  
+  // Show download popup
+  function showDownloadPopup(callback) {
+    // Store callback to execute after download
+    pendingCallback = callback;
+    
+    // Remove existing popup
+    if (popupElement) {
+      popupElement.remove();
+    }
+    
+    popupElement = document.createElement('div');
+    popupElement.id = 'audioDownloadPopup';
+    popupElement.style.cssText = `
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 10000;
+      background: rgba(20, 20, 28, 0.98);
+      backdrop-filter: blur(24px);
+      border-radius: 28px;
+      padding: 28px 32px;
+      text-align: center;
+      border: 1px solid rgba(168, 85, 247, 0.3);
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+      min-width: 320px;
+      max-width: 400px;
+      font-family: system-ui, -apple-system, sans-serif;
+    `;
+    
+    popupElement.innerHTML = `
+      <div style="font-size: 48px; margin-bottom: 16px;">🎵</div>
+      <div style="font-size: 1.2rem; font-weight: 600; margin-bottom: 8px; color: #c084fc;">Download Audio Library?</div>
+      <div style="font-size: 0.85rem; opacity: 0.7; margin-bottom: 20px; line-height: 1.4;">
+        This feature requires ${AUDIO_FILES.music.length + AUDIO_FILES.sounds.length} audio files (~45MB).<br>
+        Download once and use offline! 🎧
+      </div>
+      <div style="display: flex; gap: 12px; justify-content: center; margin-bottom: 20px;">
+        <button id="downloadYesBtn" style="
+          background: linear-gradient(135deg, #a855f7, #7c3aed);
+          border: none;
+          padding: 10px 28px;
+          border-radius: 40px;
+          color: white;
+          font-weight: 600;
+          cursor: pointer;
+          font-size: 0.9rem;
+          transition: all 0.2s ease;
+        ">Yes, Download</button>
+        <button id="downloadNoBtn" style="
+          background: transparent;
+          border: 1px solid rgba(255,255,255,0.2);
+          padding: 10px 28px;
+          border-radius: 40px;
+          color: white;
+          font-weight: 600;
+          cursor: pointer;
+          font-size: 0.9rem;
+          transition: all 0.2s ease;
+        ">No, Thanks</button>
+      </div>
+      <div id="downloadProgressArea" style="display: none;">
+        <div style="background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden; height: 8px; margin-bottom: 12px;">
+          <div id="downloadProgressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #a855f7, #c084fc); transition: width 0.3s;"></div>
+        </div>
+        <div id="downloadStatusText" style="font-size: 0.75rem; opacity: 0.8; margin-bottom: 8px;"></div>
+        <div id="downloadCurrentFile" style="font-size: 0.7rem; opacity: 0.6;"></div>
+      </div>
+    `;
+    
+    document.body.appendChild(popupElement);
+    
+    const yesBtn = document.getElementById('downloadYesBtn');
+    const noBtn = document.getElementById('downloadNoBtn');
+    const progressArea = document.getElementById('downloadProgressArea');
+    const progressBar = document.getElementById('downloadProgressBar');
+    const statusText = document.getElementById('downloadStatusText');
+    const currentFileText = document.getElementById('downloadCurrentFile');
+    
+    yesBtn.addEventListener('click', async () => {
+      yesBtn.disabled = true;
+      yesBtn.style.opacity = '0.6';
+      noBtn.disabled = true;
+      noBtn.style.opacity = '0.6';
+      progressArea.style.display = 'block';
+      
+      await downloadAllFiles(
+        (progress) => {
+          const percent = (progress.current / progress.total) * 100;
+          progressBar.style.width = `${percent}%`;
+          
+          if (progress.status === 'downloading') {
+            statusText.textContent = `Downloading... ${Math.round(percent)}%`;
+            currentFileText.textContent = `File: ${progress.fileName.substring(0, 40)}...`;
+          } else if (progress.status === 'completed') {
+            statusText.textContent = `Completed: ${progress.current}/${progress.total}`;
+            currentFileText.textContent = '';
+          } else if (progress.status === 'failed') {
+            statusText.textContent = `Failed: ${progress.fileName}`;
+            currentFileText.textContent = `Error: ${progress.error}`;
+          }
+        },
+        async (completed, total) => {
+          popupElement.innerHTML = `
+            <div style="font-size: 48px; margin-bottom: 16px;">✅</div>
+            <div style="font-size: 1.2rem; font-weight: 600; margin-bottom: 8px; color: #4ade80;">Download Complete!</div>
+            <div style="font-size: 0.85rem; opacity: 0.7; margin-bottom: 20px;">
+              Successfully downloaded ${completed}/${total} audio files.
+            </div>
+            <button id="closeSuccessBtn" style="
+              background: linear-gradient(135deg, #a855f7, #7c3aed);
+              border: none;
+              padding: 10px 28px;
+              border-radius: 40px;
+              color: white;
+              font-weight: 600;
+              cursor: pointer;
+              font-size: 0.9rem;
+            ">Start Using</button>
+          `;
+          
+          const closeBtn = document.getElementById('closeSuccessBtn');
+          closeBtn.addEventListener('click', () => {
+            popupElement.remove();
+            popupElement = null;
+            // Execute the pending callback (play music, etc.)
+            if (pendingCallback) {
+              pendingCallback();
+              pendingCallback = null;
+            }
+            // Reload to initialize audio
+            location.reload();
+          });
+        },
+        (error) => {
+          popupElement.innerHTML = `
+            <div style="font-size: 48px; margin-bottom: 16px;">⚠️</div>
+            <div style="font-size: 1.2rem; font-weight: 600; margin-bottom: 8px; color: #ff6b6b;">Download Failed</div>
+            <div style="font-size: 0.85rem; opacity: 0.7; margin-bottom: 20px;">
+              ${error}<br><br>
+              Please check your internet connection and try again.
+            </div>
+            <button id="retryBtn" style="
+              background: linear-gradient(135deg, #a855f7, #7c3aed);
+              border: none;
+              padding: 10px 28px;
+              border-radius: 40px;
+              color: white;
+              font-weight: 600;
+              cursor: pointer;
+              font-size: 0.9rem;
+            ">Retry</button>
+          `;
+          
+          const retryBtn = document.getElementById('retryBtn');
+          retryBtn.addEventListener('click', () => {
+            popupElement.remove();
+            popupElement = null;
+            showDownloadPopup(pendingCallback);
+          });
+        }
+      );
+    });
+    
+    noBtn.addEventListener('click', () => {
+      popupElement.remove();
+      popupElement = null;
+      pendingCallback = null;
+    });
+  }
+  
+  // Wrapper for audio actions - THIS IS THE KEY FIX
+  async function withAudioCheck(callback) {
+    const downloaded = await isAudioDownloaded();
+    if (downloaded) {
+      callback();
+    } else {
+      showDownloadPopup(callback);
+    }
+  }
+
+  // ===== REST OF YOUR UI CODE (keep all your existing UI code from your original file) =====
+  
   // 30 unique emoji variants for the center icon
   const icons = [
     "🌊", "📚", "🧠", "⏳", "✨", "🎯", "🌀", "⚡", "🔒", "📖", 
@@ -13,7 +409,6 @@
   const closeBtn = document.getElementById("closeSettings");
   const applyBtn = document.getElementById("applyBtn");
 
-  // Text animation speed buttons
   const speedNone = document.getElementById("speedNone");
   const speedSlow = document.getElementById("speedSlow");
   const speedMedium = document.getElementById("speedMedium");
@@ -31,13 +426,11 @@
   const mainLight = document.querySelector(".light-main");
   const secondLight = document.querySelector(".light-secondary");
 
-  // Light size sliders
   const mainLightSizeSlider = document.getElementById("mainLightSize");
   const secondLightSizeSlider = document.getElementById("secondLightSize");
   const mainLightSizeValue = document.getElementById("mainLightSizeValue");
   const secondLightSizeValue = document.getElementById("secondLightSizeValue");
 
-  // position maps
   const mainPositions = {
     center: { top: "50%", left: "50%", transform: "translate(-50%, -50%)" },
     "top-left": { top: "5%", left: "5%", transform: "translate(0, 0)" },
@@ -48,7 +441,6 @@
   const cornersList = ["top-left", "top-right", "bottom-right", "bottom-left"];
   let currentCornerIdx = 0;
 
-  // Text animation speed mapping (duration in seconds for full wave cycle)
   const textSpeedMap = {
     none: 0,
     slow: 8,
@@ -56,7 +448,6 @@
     fast: 2
   };
 
-  // state - text animation default is 'none'
   let state = {
     secondLight: false,
     mainColor: "rgb(168, 85, 247)",
@@ -69,10 +460,6 @@
     secondLightSize: 800
   };
 
-  // Store original settings when opening settings menu
-  let originalSettings = null;
-
-  // Function to update text animation speed - creates traveling wave
   function updateTextAnimationSpeed() {
     const letters = document.querySelectorAll('.wave-letter');
     const speedValue = textSpeedMap[state.textAnimationSpeed];
@@ -90,28 +477,18 @@
     }
   }
 
-  // Function to update active button state
   function updateActiveSpeedButton() {
     const buttons = [speedNone, speedSlow, speedMedium, speedFast];
     buttons.forEach(btn => btn.classList.remove('active'));
     
     switch(state.textAnimationSpeed) {
-      case 'none':
-        speedNone.classList.add('active');
-        break;
-      case 'slow':
-        speedSlow.classList.add('active');
-        break;
-      case 'medium':
-        speedMedium.classList.add('active');
-        break;
-      case 'fast':
-        speedFast.classList.add('active');
-        break;
+      case 'none': speedNone.classList.add('active'); break;
+      case 'slow': speedSlow.classList.add('active'); break;
+      case 'medium': speedMedium.classList.add('active'); break;
+      case 'fast': speedFast.classList.add('active'); break;
     }
   }
 
-  // Function to create wave text - treats "Study Mode" as one continuous sequence
   function createWaveText() {
     const text = "Study Mode";
     const chars = [];
@@ -122,7 +499,7 @@
       });
     }
     
-    waveTitleEl.innerHTML = chars.map((item, index) => {
+    waveTitleEl.innerHTML = chars.map((item) => {
       if (item.isSpace) {
         return `<span class="wave-space"></span>`;
       }
@@ -132,7 +509,6 @@
     updateTextAnimationSpeed();
   }
 
-  // Convert slider value (0-100) to duration in seconds
   function speedToDuration(speedValue) {
     const minDuration = 5;
     const maxDuration = 45;
@@ -257,43 +633,87 @@
     updateTextAnimationSpeed();
   }
 
-  function saveToLocal() {
-    const toStore = {
-      secondLight: state.secondLight,
-      mainColor: state.mainColor,
-      secondColor: state.secondColor,
-      movement: state.movement,
-      speed: state.speed,
-      mainPosition: state.mainPosition,
-      textAnimationSpeed: state.textAnimationSpeed,
-      mainLightSize: state.mainLightSize,
-      secondLightSize: state.secondLightSize
-    };
-    localStorage.setItem("studyMode", JSON.stringify(toStore));
-  }
+  // Enhanced save function with size verification
+function saveToLocal() {
+  const toStore = {
+    secondLight: state.secondLight,
+    mainColor: state.mainColor,
+    secondColor: state.secondColor,
+    movement: state.movement,
+    speed: state.speed,
+    mainPosition: state.mainPosition,
+    textAnimationSpeed: state.textAnimationSpeed,
+    mainLightSize: state.mainLightSize,
+    secondLightSize: state.secondLightSize
+  };
+  localStorage.setItem("studyMode", JSON.stringify(toStore));
+  console.log("Saved settings:", toStore); // Debug log
+}
 
-  function loadFromLocal() {
-    const saved = localStorage.getItem("studyMode");
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        state = { ...state, ...parsed };
-        // Convert old small sizes to new scale if needed
-        if (state.mainLightSize && state.mainLightSize < 400 && state.mainLightSize !== 400 && state.mainLightSize > 0) {
-          state.mainLightSize = Math.round(state.mainLightSize / 260 * 400);
-        }
-        if (state.secondLightSize && state.secondLightSize < 800 && state.secondLightSize !== 800 && state.secondLightSize > 0) {
-          state.secondLightSize = Math.round(state.secondLightSize / 520 * 800);
-        }
-        if (state.mainColor && !state.mainColor.startsWith('rgb') && !state.mainColor.startsWith('#')) state.mainColor = "rgb(168, 85, 247)";
-        if (state.secondColor && !state.secondColor.startsWith('rgb') && !state.secondColor.startsWith('#')) state.secondColor = "rgb(196, 181, 253)";
-        if (typeof state.mainLightSize !== 'number') state.mainLightSize = 400;
-        if (typeof state.secondLightSize !== 'number') state.secondLightSize = 800;
-      } catch(e) {}
+// Enhanced load function with proper size restoration
+function loadFromLocal() {
+  const saved = localStorage.getItem("studyMode");
+  if (saved) {
+    try {
+      const parsed = JSON.parse(saved);
+      state = { ...state, ...parsed };
+      
+      // Ensure valid size values
+      if (typeof state.mainLightSize !== 'number' || state.mainLightSize < 100 || state.mainLightSize > 400) {
+        state.mainLightSize = 400;
+      }
+      if (typeof state.secondLightSize !== 'number' || state.secondLightSize < 200 || state.secondLightSize > 800) {
+        state.secondLightSize = 800;
+      }
+      
+      // Convert old size scale if needed (backward compatibility)
+      if (state.mainLightSize < 100 && state.mainLightSize > 0) {
+        state.mainLightSize = 400;
+      }
+      if (state.secondLightSize < 200 && state.secondLightSize > 0) {
+        state.secondLightSize = 800;
+      }
+      
+      console.log("Loaded settings:", parsed); // Debug log
+      console.log("Restored light sizes - Main:", state.mainLightSize, "Secondary:", state.secondLightSize);
+      
+    } catch(e) {
+      console.error("Error loading settings:", e);
     }
-    if (state.mainColor && state.mainColor.startsWith('#')) state.mainColor = hexToRgb(state.mainColor);
-    if (state.secondColor && state.secondColor.startsWith('#')) state.secondColor = hexToRgb(state.secondColor);
   }
+}
+
+// Save sizes specifically (call this whenever sizes change)
+function saveLightSizes() {
+  localStorage.setItem("mainLightSize", state.mainLightSize);
+  localStorage.setItem("secondLightSize", state.secondLightSize);
+  saveToLocal(); // Also save full state
+}
+
+// Load sizes specifically
+function loadLightSizes() {
+  const savedMain = localStorage.getItem("mainLightSize");
+  const savedSecond = localStorage.getItem("secondLightSize");
+  
+  if (savedMain) state.mainLightSize = parseInt(savedMain);
+  if (savedSecond) state.secondLightSize = parseInt(savedSecond);
+  
+  // Apply sizes
+  if (mainLight) {
+    mainLight.style.width = `${state.mainLightSize}px`;
+    mainLight.style.height = `${state.mainLightSize}px`;
+  }
+  if (secondLight) {
+    secondLight.style.width = `${state.secondLightSize}px`;
+    secondLight.style.height = `${state.secondLightSize}px`;
+  }
+  
+  // Update slider values
+  if (mainLightSizeSlider) mainLightSizeSlider.value = state.mainLightSize;
+  if (secondLightSizeSlider) secondLightSizeSlider.value = state.secondLightSize;
+  if (mainLightSizeValue) mainLightSizeValue.textContent = `${Math.round(state.mainLightSize / 400 * 100)}%`;
+  if (secondLightSizeValue) secondLightSizeValue.textContent = `${Math.round(state.secondLightSize / 800 * 100)}%`;
+}
 
   function randomIcon() {
     const randomIndex = Math.floor(Math.random() * icons.length);
@@ -304,7 +724,6 @@
     }, 200);
   }
 
-  // Auto-save settings when they change (only if menu is open)
   function autoSaveSettings() {
     if (settingsDiv && !settingsDiv.classList.contains('hidden')) {
       const hasChanges = (
@@ -344,7 +763,6 @@
     }
   }
 
-  // Text speed button handlers with auto-save
   speedNone.addEventListener("click", () => {
     state.textAnimationSpeed = "none";
     updateActiveSpeedButton();
@@ -373,7 +791,6 @@
     autoSaveSettings();
   });
 
-  // Event handlers with auto-save
   toggleLightCheck.addEventListener("change", () => {
     state.secondLight = toggleLightCheck.checked;
     updateSecondLightVisibility();
@@ -473,10 +890,7 @@
     }
   });
 
-  // Initialize wave text
   createWaveText();
-  
-  // Initialize
   loadFromLocal();
   fullRender();
   randomIcon();
@@ -485,24 +899,25 @@
 
   // ===== MUSIC PLAYER =====
   const playlist = [
-    { artist: "fassounds", song: "Good Night - Lofi Cozy Chill Music", file: "music/fassounds-good-night-lofi-cozy-chill-music-160166.opus" },
-    { artist: "fassounds", song: "Lofi Study - Calm Peaceful Chill Hop", file: "music/fassounds-lofi-study-calm-peaceful-chill-hop-112191.opus" },
-    { artist: "lofidreams", song: "Cozy Lofi Background Music", file: "music/lofidreams-cozy-lofi-background-music-457199.opus" },
-    { artist: "lofidreams", song: "Lofi Jazz Music", file: "music/lofidreams-lofi-jazz-music-485312.opus" },
-    { artist: "lofi_music_library", song: "Coffee Lofi - Chill Lofi Ambient", file: "music/lofi_music_library-coffee-lofi-chill-lofi-ambient-458901.opus" },
-    { artist: "lofi_music_library", song: "Lofi Girl - Chill Lofi Beats Lofi Ambient", file: "music/lofi_music_library-lofi-girl-chill-lofi-beats-lofi-ambient-461871.opus" },
-    { artist: "lofi_music_library", song: "Lofi Rain - Lofi Music", file: "music/lofi_music_library-lofi-rain-lofi-music-458077.opus" },
-    { artist: "mondamusic", song: "Lofi Chill", file: "music/mondamusic-lofi-chill-chill-512854.opus" },
-    { artist: "mondamusic", song: "Lofi - Chill Lofi Girl", file: "music/mondamusic-lofi-lofi-chill-lofi-girl-491690.opus" },
-    { artist: "mondamusic", song: "Lofi - Lofi Girl Lofi Chill", file: "music/mondamusic-lofi-lofi-girl-lofi-chill-512853.opus" },
-    { artist: "sonican", song: "Lo Fi Music Loop - Sentimental Jazzy Love", file: "music/sonican-lo-fi-music-loop-sentimental-jazzy-love-473154.opus" },
-    { artist: "watermello", song: "Lofi Chill - Lofi Girl Lofi", file: "music/watermello-lofi-chill-lofi-girl-lofi-488388.opus" },
-    { artist: "watermello", song: "Lofi - Lofi Girl Lofi Chill", file: "music/watermello-lofi-lofi-girl-lofi-chill-484610.opus" }
+    { artist: "fassounds", song: "Good Night - Lofi Cozy Chill Music", file: "fassounds-good-night-lofi-cozy-chill-music-160166.opus" },
+    { artist: "fassounds", song: "Lofi Study - Calm Peaceful Chill Hop", file: "fassounds-lofi-study-calm-peaceful-chill-hop-112191.opus" },
+    { artist: "lofidreams", song: "Cozy Lofi Background Music", file: "lofidreams-cozy-lofi-background-music-457199.opus" },
+    { artist: "lofidreams", song: "Lofi Jazz Music", file: "lofidreams-lofi-jazz-music-485312.opus" },
+    { artist: "lofi_music_library", song: "Coffee Lofi - Chill Lofi Ambient", file: "lofi_music_library-coffee-lofi-chill-lofi-ambient-458901.opus" },
+    { artist: "lofi_music_library", song: "Lofi Girl - Chill Lofi Beats Lofi Ambient", file: "lofi_music_library-lofi-girl-chill-lofi-beats-lofi-ambient-461871.opus" },
+    { artist: "lofi_music_library", song: "Lofi Rain - Lofi Music", file: "lofi_music_library-lofi-rain-lofi-music-458077.opus" },
+    { artist: "mondamusic", song: "Lofi Chill", file: "mondamusic-lofi-chill-chill-512854.opus" },
+    { artist: "mondamusic", song: "Lofi - Chill Lofi Girl", file: "mondamusic-lofi-lofi-chill-lofi-girl-491690.opus" },
+    { artist: "mondamusic", song: "Lofi - Lofi Girl Lofi Chill", file: "mondamusic-lofi-lofi-girl-lofi-chill-512853.opus" },
+    { artist: "sonican", song: "Lo Fi Music Loop - Sentimental Jazzy Love", file: "sonican-lo-fi-music-loop-sentimental-jazzy-love-473154.opus" },
+    { artist: "watermello", song: "Lofi Chill - Lofi Girl Lofi", file: "watermello-lofi-chill-lofi-girl-lofi-488388.opus" },
+    { artist: "watermello", song: "Lofi - Lofi Girl Lofi Chill", file: "watermello-lofi-lofi-girl-lofi-chill-484610.opus" }
   ];
 
   let currentTrack = 0;
   let audio = new Audio();
   let isPlaying = false;
+  let audioBlobUrls = new Map();
 
   const playPauseBtn = document.getElementById('playPauseBtn');
   const prevBtn = document.getElementById('prevBtn');
@@ -515,14 +930,22 @@
   const artistNameSpan = document.getElementById('artistName');
   const songNameSpan = document.getElementById('songName');
 
-  function loadTrack(index) {
+  async function loadTrack(index) {
     const track = playlist[index];
     if (!track) return;
     
     artistNameSpan.textContent = track.artist;
     songNameSpan.textContent = track.song;
-    audio.src = track.file;
-    audio.load();
+    
+    const audioUrl = await getAudioUrl(track.file);
+    if (audioUrl) {
+      if (audioBlobUrls.has(track.file)) {
+        URL.revokeObjectURL(audioBlobUrls.get(track.file));
+      }
+      audioBlobUrls.set(track.file, audioUrl);
+      audio.src = audioUrl;
+      audio.load();
+    }
     
     progressFill.style.width = '0%';
     timeCurrent.textContent = '0:00';
@@ -593,7 +1016,9 @@
   }
 
   audio.addEventListener('timeupdate', updateProgress);
-  audio.addEventListener('ended', nextTrack);
+  audio.addEventListener('ended', () => {
+    withAudioCheck(() => nextTrack());
+  });
   audio.addEventListener('canplay', () => {
     timeTotal.textContent = formatTime(audio.duration);
   });
@@ -602,17 +1027,26 @@
     audio.volume = e.target.value / 100;
   });
 
-  playPauseBtn.addEventListener('click', togglePlayPause);
-  prevBtn.addEventListener('click', prevTrack);
-  nextBtn.addEventListener('click', nextTrack);
-  progressBar.addEventListener('click', seek);
+  // FIXED: Music player buttons with download check
+  playPauseBtn.addEventListener('click', () => {
+    withAudioCheck(() => togglePlayPause());
+  });
+  
+  prevBtn.addEventListener('click', () => {
+    withAudioCheck(() => prevTrack());
+  });
+  
+  nextBtn.addEventListener('click', () => {
+    withAudioCheck(() => nextTrack());
+  });
+  
+  progressBar.addEventListener('click', (e) => {
+    withAudioCheck(() => seek(e));
+  });
 
   audio.volume = 0.7;
-  loadTrack(0);
-  isPlaying = false;
-  playPauseBtn.textContent = '▶';
 
-  // ===== AMBIENT SOUND MIXER WITH LOCAL FILES =====
+  // ===== AMBIENT SOUND MIXER =====
   const soundBtn = document.getElementById('soundBtn');
   const ambientPopup = document.getElementById('ambientPopup');
   const closeAmbientBtn = document.getElementById('closeAmbientBtn');
@@ -651,47 +1085,47 @@
   let masterVolume = 0.7;
   
   const soundFiles = {
-    fireplace: 'sounds/fireplace.opus',
-    wind: 'sounds/wind.opus',
-    nature: 'sounds/bird.opus',
-    rain: 'sounds/rain.opus',
-    thunder: 'sounds/thunder.opus',
-    waves: 'sounds/ocean.opus'
+    fireplace: 'fireplace.opus',
+    wind: 'wind.opus',
+    nature: 'bird.opus',
+    rain: 'rain.opus',
+    thunder: 'thunder.opus',
+    waves: 'ocean.opus'
   };
   
-  function createAudioElement(soundName) {
-    const audioFile = soundFiles[soundName];
-    console.log(`Attempting to load: ${audioFile}`);
-    
+  async function createAudioElement(soundName) {
+    const fileName = soundFiles[soundName];
+    const audioUrl = await getAudioUrl(fileName);
     const audio = new Audio();
-    audio.src = audioFile;
+    
+    if (audioUrl) {
+      audio.src = audioUrl;
+    }
     audio.loop = true;
     audio.volume = ambientVolumes[soundName] * masterVolume;
     
     audio.addEventListener('error', (e) => {
       console.error(`Error loading sound ${soundName}:`, e);
-      console.log(`Make sure the file exists at: ${audioFile}`);
-    });
-    
-    audio.addEventListener('canplaythrough', () => {
-      console.log(`Sound ${soundName} loaded successfully`);
     });
     
     return audio;
   }
   
+  // FIXED: Sound button with download check
   soundBtn.addEventListener('click', () => {
-    if (ambientOpen) {
-      ambientPopup.classList.remove('show');
-      ambientOpen = false;
-    } else {
-      ambientPopup.classList.add('show');
-      ambientOpen = true;
-      const toolPopup = document.getElementById('toolPopup');
-      const pomodoroPopup = document.getElementById('pomodoroPopup');
-      if (toolPopup) toolPopup.classList.remove('show');
-      if (pomodoroPopup) pomodoroPopup.classList.remove('show');
-    }
+    withAudioCheck(() => {
+      if (ambientOpen) {
+        ambientPopup.classList.remove('show');
+        ambientOpen = false;
+      } else {
+        ambientPopup.classList.add('show');
+        ambientOpen = true;
+        const toolPopup = document.getElementById('toolPopup');
+        const pomodoroPopup = document.getElementById('pomodoroPopup');
+        if (toolPopup) toolPopup.classList.remove('show');
+        if (pomodoroPopup) pomodoroPopup.classList.remove('show');
+      }
+    });
   });
   
   closeAmbientBtn.addEventListener('click', () => {
@@ -722,8 +1156,9 @@
       ambientEnabled[soundName] = true;
       toggle.classList.add('active');
       volumeSlider.disabled = false;
-      const audioElement = createAudioElement(soundName);
-      ambientAudios[soundName] = audioElement;
+      createAudioElement(soundName).then(audio => {
+        ambientAudios[soundName] = audio;
+      });
     }
     if (savedVolume) {
       ambientVolumes[soundName] = parseFloat(savedVolume);
@@ -733,45 +1168,43 @@
       }
     }
     
-    toggle.addEventListener('click', async () => {
-      ambientEnabled[soundName] = !ambientEnabled[soundName];
-      
-      if (ambientEnabled[soundName]) {
-        toggle.classList.add('active');
-        volumeSlider.disabled = false;
+    // FIXED: Ambient sound toggle with download check
+    toggle.addEventListener('click', () => {
+      withAudioCheck(async () => {
+        ambientEnabled[soundName] = !ambientEnabled[soundName];
         
-        try {
-          if (!ambientAudios[soundName]) {
-            ambientAudios[soundName] = createAudioElement(soundName);
-          }
+        if (ambientEnabled[soundName]) {
+          toggle.classList.add('active');
+          volumeSlider.disabled = false;
           
-          ambientAudios[soundName].volume = ambientVolumes[soundName] * masterVolume;
-          
-          const playPromise = ambientAudios[soundName].play();
-          if (playPromise !== undefined) {
-            playPromise.catch(error => {
-              console.log(`Playback failed for ${soundName}:`, error);
-              setTimeout(() => {
-                if (ambientEnabled[soundName] && ambientAudios[soundName]) {
-                  ambientAudios[soundName].play().catch(e => console.log('Retry failed:', e));
-                }
-              }, 100);
-            });
+          try {
+            if (!ambientAudios[soundName]) {
+              ambientAudios[soundName] = await createAudioElement(soundName);
+            }
+            
+            ambientAudios[soundName].volume = ambientVolumes[soundName] * masterVolume;
+            
+            const playPromise = ambientAudios[soundName].play();
+            if (playPromise !== undefined) {
+              playPromise.catch(error => {
+                console.log(`Playback failed for ${soundName}:`, error);
+              });
+            }
+          } catch(e) {
+            console.log('Error playing sound:', soundName, e);
           }
-        } catch(e) {
-          console.log('Error playing sound:', soundName, e);
+        } else {
+          toggle.classList.remove('active');
+          volumeSlider.disabled = true;
+          
+          if (ambientAudios[soundName]) {
+            ambientAudios[soundName].pause();
+            ambientAudios[soundName].currentTime = 0;
+          }
         }
-      } else {
-        toggle.classList.remove('active');
-        volumeSlider.disabled = true;
         
-        if (ambientAudios[soundName]) {
-          ambientAudios[soundName].pause();
-          ambientAudios[soundName].currentTime = 0;
-        }
-      }
-      
-      localStorage.setItem(`ambient_${soundName}_enabled`, ambientEnabled[soundName]);
+        localStorage.setItem(`ambient_${soundName}_enabled`, ambientEnabled[soundName]);
+      });
     });
     
     volumeSlider.addEventListener('input', (e) => {
@@ -841,7 +1274,6 @@
     stickyNoteVisible = false;
   });
 
-  // ===== STICKY NOTE DRAG FUNCTIONALITY =====
   const stickyNote = document.getElementById('stickyNote');
   let isDragging = false;
   let dragStartX, dragStartY;
@@ -909,7 +1341,7 @@
     }
   });
 
-  // ===== POMODORO TIMER WITH LOCAL SOUNDS =====
+  // ===== POMODORO TIMER =====
   let pomodoroTime = 25 * 60;
   let pomodoroInterval = null;
   let isPomodoroRunning = false;
@@ -934,26 +1366,20 @@
   const savePomodoroSettings = document.getElementById('savePomodoroSettings');
   const cancelPomodoroSettings = document.getElementById('cancelPomodoroSettings');
 
-  function playChime() {
-    try {
-      if (chimeAudio) {
-        chimeAudio.pause();
-        chimeAudio.currentTime = 0;
+  async function playChime() {
+    const chimeUrl = await getAudioUrl('break.opus');
+    if (chimeUrl) {
+      try {
+        if (chimeAudio) {
+          chimeAudio.pause();
+          chimeAudio.currentTime = 0;
+        }
+        chimeAudio = new Audio(chimeUrl);
+        chimeAudio.volume = 0.6;
+        chimeAudio.play().catch(e => console.log('Chime sound error:', e));
+      } catch(e) {
+        console.log('Could not play chime sound:', e);
       }
-      chimeAudio = new Audio('sounds/break.opus');
-      chimeAudio.volume = 0.6;
-      
-      const playPromise = chimeAudio.play();
-      if (playPromise !== undefined) {
-        playPromise.catch(e => {
-          console.log('Chime sound error:', e);
-          setTimeout(() => {
-            chimeAudio.play().catch(err => console.log('Chime retry failed:', err));
-          }, 100);
-        });
-      }
-    } catch(e) {
-      console.log('Could not play chime sound:', e);
     }
   }
 
@@ -1170,7 +1596,7 @@
   loadPomodoroSettings();
   resetPomodoroTimer();
 
-  // ===== TO-DO LIST FUNCTIONALITY =====
+  // ===== TO-DO LIST =====
   function initTodoList() {
     const todoList = document.getElementById('todoList');
     const addTodoBtn = document.getElementById('addTodoBtn');
@@ -1343,7 +1769,6 @@
     loadTodos();
   }
 
-  // Custom confirmation dialog
   function showConfirm(message, onConfirm) {
     const confirmDiv = document.createElement('div');
     confirmDiv.className = 'custom-confirm';
@@ -1377,4 +1802,33 @@
   
   stickyNoteContainer.style.display = 'none';
   stickyNoteVisible = false;
+  
+  // Initialize audio player UI
+  async function initAudioPlayer() {
+    const hasAudio = await isAudioDownloaded();
+    if (hasAudio) {
+      loadTrack(0);
+      playPauseBtn.disabled = false;
+      playPauseBtn.style.opacity = '1';
+      prevBtn.disabled = false;
+      prevBtn.style.opacity = '1';
+      nextBtn.disabled = false;
+      nextBtn.style.opacity = '1';
+      artistNameSpan.textContent = playlist[0].artist;
+      songNameSpan.textContent = playlist[0].song;
+    } else {
+      artistNameSpan.textContent = '🎵';
+      songNameSpan.textContent = 'Click play to download audio library';
+      playPauseBtn.disabled = false;  // DON'T disable - we want them to click!
+      playPauseBtn.style.opacity = '1';
+      prevBtn.disabled = false;
+      prevBtn.style.opacity = '1';
+      nextBtn.disabled = false;
+      nextBtn.style.opacity = '1';
+    }
+    isPlaying = false;
+    playPauseBtn.textContent = '▶';
+  }
+  
+  initAudioPlayer();
 })();

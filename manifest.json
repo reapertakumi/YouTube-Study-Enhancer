@@ -29,22 +29,14 @@
   },
   "content_scripts": [
     {
-      "matches": [
-        "*://*.youtube.com/*"
-      ],
-      "js": [
-        "content.js"
-      ],
+      "matches": ["*://*.youtube.com/*"],
+      "js": ["content.js"],
       "run_at": "document_idle",
       "all_frames": false
     },
     {
-      "matches": [
-        "<all_urls>"
-      ],
-      "js": [
-        "blocker.js"
-      ],
+      "matches": ["<all_urls>"],
+      "js": ["blocker.js"],
       "run_at": "document_start",
       "all_frames": true
     }
@@ -52,15 +44,11 @@
   "web_accessible_resources": [
     {
       "resources": [
-        "music/*",
-        "sounds/*",
         "blocker.html",
         "blocker.css",
         "blocker_ui.js"
       ],
-      "matches": [
-        "<all_urls>"
-      ]
+      "matches": ["<all_urls>"]
     }
   ]
 }
