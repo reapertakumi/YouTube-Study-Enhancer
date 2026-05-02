@@ -28,8 +28,3 @@
     ]
   }
 }
-
-
-// to remember
-// cd file location
-// certutil -hashfile "wind.opus" SHA256
