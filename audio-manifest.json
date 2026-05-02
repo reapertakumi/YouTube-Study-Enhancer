@@ -1,0 +1,35 @@
+{
+  "version": "1.0.0",
+  "lastUpdated": "2026-05-02",
+  "files": {
+    "music": [
+      { "fileName": "fassounds-good-night-lofi-cozy-chill-music-160166.opus", "hash": "", "sizeKB": 0 },
+      { "fileName": "fassounds-lofi-study-calm-peaceful-chill-hop-112191.opus", "hash": "", "sizeKB": 0 },
+      { "fileName": "lofidreams-cozy-lofi-background-music-457199.opus", "hash": "", "sizeKB": 0 },
+      { "fileName": "lofidreams-lofi-jazz-music-485312.opus", "hash": "", "sizeKB": 0 },
+      { "fileName": "lofi_music_library-coffee-lofi-chill-lofi-ambient-458901.opus", "hash": "", "sizeKB": 0 },
+      { "fileName": "lofi_music_library-lofi-girl-chill-lofi-beats-lofi-ambient-461871.opus", "hash": "", "sizeKB": 0 },
+      { "fileName": "lofi_music_library-lofi-rain-lofi-music-458077.opus", "hash": "", "sizeKB": 0 },
+      { "fileName": "mondamusic-lofi-chill-chill-512854.opus", "hash": "", "sizeKB": 0 },
+      { "fileName": "mondamusic-lofi-lofi-chill-lofi-girl-491690.opus", "hash": "", "sizeKB": 0 },
+      { "fileName": "mondamusic-lofi-lofi-girl-lofi-chill-512853.opus", "hash": "", "sizeKB": 0 },
+      { "fileName": "sonican-lo-fi-music-loop-sentimental-jazzy-love-473154.opus", "hash": "", "sizeKB": 0 },
+      { "fileName": "watermello-lofi-chill-lofi-girl-lofi-488388.opus", "hash": "", "sizeKB": 0 },
+      { "fileName": "watermello-lofi-lofi-girl-lofi-chill-484610.opus", "hash": "", "sizeKB": 0 }
+    ],
+    "sounds": [
+      { "fileName": "fireplace.opus", "hash": "", "sizeKB": 0 },
+      { "fileName": "wind.opus", "hash": "", "sizeKB": 0 },
+      { "fileName": "bird.opus", "hash": "", "sizeKB": 0 },
+      { "fileName": "rain.opus", "hash": "", "sizeKB": 0 },
+      { "fileName": "thunder.opus", "hash": "", "sizeKB": 0 },
+      { "fileName": "ocean.opus", "hash": "", "sizeKB": 0 },
+      { "fileName": "break.opus", "hash": "", "sizeKB": 0 }
+    ]
+  }
+}
+
+
+// to remember
+// cd file location
+// certutil -hashfile "wind.opus" SHA256
