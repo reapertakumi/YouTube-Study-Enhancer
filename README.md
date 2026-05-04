@@ -1,68 +1,57 @@
-# Changelog
+<div align="center">
+    <img src="icons/icon128.png"
+        title="YTSE" alt="YTSE" width="120" />
+    <h1>YT Study Enhancer</h1>
+    <p>
+       Transform YouTube Into Your Study Space
+    </p>
+    <a href="https://v0-studyflowapps.vercel.app/">
+        StudyFlow
+    </a>
+</div>
 
-## Version 0.3.6 - Major Update (2024)
+## Downloads
+> [!NOTE]
+> Extension is still under Development, please report any Bugs
+- [Chrome Webstore](https://chromewebstore.google.com/detail/youtube-study-enhancer/pamglonmkhcpoilnohgaoghgfnjjmjne)
+<p>
+</p>
 
-### 🎯 Core Changes
-
-#### New Blocker Page System
-- **Complete rewrite**: Switched from script injection to direct redirection system
-- **New UI design**: Completely redesigned blocker page with modern aesthetics
+## Features
+#### Blocker Page System
+- **Core**: Local Html, Beautiful Blocker Page, Curated Lofi Music, Atmosphere Sounds
+- **Tools** Included Pomodor Timer with customizable focus/break durations, 
+A Persistent to-do list that saves to localStorage
+- **New UI design**: Completely redesigned blocker page with Lofi curated Music
 - **Performance boost**: Eliminated injection overhead, resulting in faster page loads
 - **Better reliability**: Redirection system works more consistently across all sites
 
-#### Enhanced Visual Experience
-- **Wave text animation**: New traveling wave animation for "Study Mode" title
-- **4 animation speeds**: Added speed controls (None, Slow, Medium, Fast) for text animation
-- **Dual light system**: Main light + secondary light with customizable colors
-- **3 movement types**: Static, Smooth Bounce, and Orbit Dance for secondary light
-- **Position presets**: Center, Top-Left, Top-Right, Bottom-Left, Bottom-Right for main light
-- **Dynamic animations**: Smooth pulse and drift animations with adjustable speeds
+#### Visual Experience
+- **Preset Themes**: Allowing you to set preset themes with ur both dark and light mode support
+- **Fonts**: Lets you choose a Font that the Extension popup will be displayed in
+- **Block Page**: Static, Smooth Bounce, and Orbit Dance for subtle light animation, with Speed Settings
 
-#### New Features
-
-**Pomodoro Timer** 🍅
-- Built-in focus timer with customizable focus/break durations
-- Visual phase indicator (Focus Time / Break Time)
-- Local sound notifications when timer completes
-- Draggable interface that remembers position
-- Start, Pause, and Reset controls
-
-**Sticky Notes / To-Do List** 📝
-- Persistent to-do list that saves to localStorage
-- Double-click to edit any task
-- Add, complete, and delete individual tasks
-- Clear all tasks with confirmation
-- Draggable window that remembers position
-- Animated slide-in for new tasks
-
-**Ambient Sound Mixer** 🌿
+## Tools
+**Ambient Sound Mixer**
 - 6 ambient sound channels: Fireplace, Wind, Birds & Nature, Rain, Thunder, Ocean Waves
 - Individual volume controls for each sound
 - Master volume control
 - Persistent settings (saves on/off states and volumes)
 - Local audio files for offline use
 
-**Music Player** 🎵
-- LoFi study music playlist (13 tracks)
+**Music Player**
+- LoFi study music playlist (13 tracks, 04.05.2026
 - Play/Pause, Previous, Next controls
 - Volume slider with real-time adjustment
 - Progress bar with seeking functionality
 - Now playing display showing artist and song
 
-#### Popup Enhancements
+## Popup
 
 **Block Sites Management**
 - Removable default sites (Instagram, Twitter, TikTok, Pinterest, Reddit)
-- New "X" delete button that appears on hover over cards
-- Proper animation when removing sites
+- Custom Domain, Enter ur custom set Domain for blocking more distractions (https://www. or www. or just url.com) blocks domain wide google.com also blocks home.google.com
 - Persistence of removed sites across sessions
-
-**Settings Panel**
-- New tabbed interface: General, YouTube, Blocker Page
-- Reset to Default button - restores all factory settings
-- Theme presets: Default, Sunset, Ocean, Forest, Midnight, Coffee, Cyberpunk, Aurora, Sakura
-- Font selector with 10 font options
-- New Tab Page toggle (Focus Page vs Chrome Default)
 
 **YouTube Features**
 - Video Feed Mode: Remove (hides feed, expands video) or Hide (hides feed, keeps video size)
