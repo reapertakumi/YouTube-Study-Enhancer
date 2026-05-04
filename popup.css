@@ -165,13 +165,12 @@ body.light-theme .settings-toggle-group {
 }
 
 body.light-theme .toggle-option.active {
-  background: #4a90e2;
-  color: white;
+  color: #000000;
 }
 
 body.light-theme .toggle-option:hover:not(.active) {
-  background: rgba(74, 144, 226, 0.15);
-  color: #4a90e2;
+  background: transparent;
+  color: #3ea6ff;
 }
 
 body.light-theme .settings-description {
@@ -1173,8 +1172,9 @@ input:checked + .slider::before {
 .settings-modal-content {
   background: #1e1e1e;
   border-radius: 24px;
-  width: 280px;
-  max-width: 85%;
+  width: 320px;
+  max-width: 95%;
+  height: 470px;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
   overflow: hidden;
   animation: modalScaleIn 0.25s cubic-bezier(0.2, 0.9, 0.4, 1.1);
@@ -1258,6 +1258,7 @@ input:checked + .slider::before {
 
 /* Tab Bar */
 .settings-tab-bar {
+  position: relative;
   display: flex;
   background: #1e1e1e;
   padding: 12px 20px 0 20px;
@@ -1272,23 +1273,30 @@ input:checked + .slider::before {
   font-weight: 500;
   cursor: pointer;
   color: #888;
-  transition: all 0.2s ease;
+  transition: color 0.2s ease;
   position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.settings-tab-btn span {
+  display: inline-block;
 }
 
 .settings-tab-btn.active {
   color: #3ea6ff;
 }
 
-.settings-tab-btn.active::after {
-  content: '';
+.settings-tab-underline {
   position: absolute;
-  bottom: -1px;
+  bottom: 0;
   left: 0;
-  right: 0;
   height: 2px;
+  width: 0;
   background: #3ea6ff;
   border-radius: 2px;
+  transition: left 0.2s ease, width 0.2s ease;
 }
 
 .settings-tab-btn:hover {
@@ -1300,6 +1308,9 @@ input:checked + .slider::before {
   display: none;
   padding: 20px;
   background: #1e1e1e;
+  max-height: calc(470px - 124px);
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .settings-tab-content.active {
@@ -1316,10 +1327,62 @@ input:checked + .slider::before {
 }
 
 .settings-item-row {
+  position: relative;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
   margin-bottom: 12px;
+  min-width: 0;
+}
+
+.settings-toggle-group {
+  flex: 1;
+  min-width: 180px;
+  max-width: 100%;
+}
+
+.toggle-option[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 50%;
+  bottom: -42px;
+  transform: translateX(-50%) translateY(4px);
+  width: max-content;
+  max-width: 180px;
+  padding: 8px 10px;
+  font-size: 11px;
+  color: #f3f4f6;
+  background: rgba(20, 20, 20, 0.95);
+  border-radius: 8px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  white-space: nowrap;
+  transition: opacity 0.18s ease 0s, transform 0.18s ease 0s;
+  transition-delay: 0s;
+  z-index: 1001;
+}
+
+.toggle-option[data-tooltip]:hover::after {
+  /* show tooltip after 1s hover, hide immediately when mouse leaves */
+  transition-delay: 1s;
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+
+@keyframes tooltipFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+  }
 }
 
 .settings-label {
@@ -1330,32 +1393,70 @@ input:checked + .slider::before {
 
 /* Toggle Group - Simple toggle buttons */
 .settings-toggle-group {
+  position: relative;
   display: flex;
   gap: 4px;
+  align-items: stretch;
+  width: 100%;
+  min-width: 180px;
   background: #2a2a2a;
   padding: 2px;
-  border-radius: 8px;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.settings-toggle-group::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 2px;
+  width: 50%;
+  background: rgba(62, 166, 255, 0.18);
+  border-radius: 999px;
+  transition: transform 0.25s ease;
+  transform: translateX(0);
+}
+
+.settings-toggle-group.toggle-selected-right::before {
+  transform: translateX(calc(100% + 4px));
 }
 
 .toggle-option {
-  background: transparent;
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  padding: 6px 12px;
   border: none;
-  padding: 4px 12px;
-  font-size: 11px;
+  background: transparent;
+  color: #888;
+  font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  color: #aaa;
-  border-radius: 6px;
-  transition: all 0.2s ease;
+  border-radius: 999px;
+  transition: color 0.3s ease;
+}
+
+/* Remove native focus/selection highlights and make tap highlight transparent */
+.toggle-option {
+  -webkit-appearance: none;
+  appearance: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.toggle-option:focus,
+.toggle-option:active,
+.toggle-option:focus-visible {
+  outline: none;
+  box-shadow: none;
 }
 
 .toggle-option.active {
-  background: #3ea6ff;
-  color: white;
+  color: #ffffff;
+  background: transparent;
 }
 
 .toggle-option:hover:not(.active) {
-  background: rgba(62, 166, 255, 0.2);
   color: #3ea6ff;
 }
 
@@ -1369,38 +1470,42 @@ input:checked + .slider::before {
 }
 
 /* Change Password Button */
-.change-password-btn {
+.change-password-btn,
+.revert-default-btn {
   width: 100%;
-  background: rgba(62, 166, 255, 0.1);
-  border: 1px solid rgba(62, 166, 255, 0.3);
-  border-radius: 10px;
-  padding: 8px 12px;
-  color: #3ea6ff;
-  font-size: 12px;
-  font-weight: 500;
+  border-radius: 14px;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
-  margin-bottom: 12px;
+  transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 42px;
+}
+
+.change-password-btn {
+  background: rgba(62, 166, 255, 0.14);
+  border: 1px solid rgba(62, 166, 255, 0.35);
+  color: #3ea6ff;
 }
 
 .change-password-btn:hover {
-  background: rgba(62, 166, 255, 0.2);
+  background: rgba(62, 166, 255, 0.22);
   transform: translateY(-1px);
 }
 
-/* Revert to Default Button */
 .revert-default-btn {
-  width: 100%;
-  background: rgba(220, 53, 69, 0.1);
-  border: 1px solid rgba(220, 53, 69, 0.3);
-  border-radius: 10px;
-  padding: 8px 12px;
+  background: rgba(220, 53, 69, 0.13);
+  border: 1px solid rgba(220, 53, 69, 0.35);
   color: #dc3545;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  margin-bottom: 6px;
+}
+
+.revert-default-btn:hover {
+  background: rgba(220, 53, 69, 0.2);
+  transform: translateY(-1px);
 }
 
 .revert-default-btn:hover {
@@ -1966,61 +2071,6 @@ body.light-theme.theme-coffee .card span {
   color: #bf360c !important;
 }
 
-/* Cyberpunk Theme */
-body.theme-cyberpunk {
-  background: #0d0d1a;
-}
-body.theme-cyberpunk .card {
-  background: #1a1a2e;
-  border: 1px solid #ff006e;
-}
-body.theme-cyberpunk .card:hover {
-  background: #22223b;
-  box-shadow: 0 0 10px rgba(255, 0, 110, 0.3);
-}
-body.theme-cyberpunk .slider {
-  background: #ff006e;
-}
-body.theme-cyberpunk input:checked + .slider {
-  background: #00f5d4;
-}
-body.theme-cyberpunk .settings-label,
-body.theme-cyberpunk .section-title,
-body.theme-cyberpunk h1 {
-  color: #00f5d4;
-}
-body.theme-cyberpunk .section-title {
-  text-shadow: 0 0 5px #00f5d4;
-}
-body.light-theme.theme-cyberpunk {
-  background: #f5f0ff;
-}
-body.light-theme.theme-cyberpunk .card {
-  background: #ffffff;
-  border: 1px solid #ff006e;
-}
-body.light-theme.theme-cyberpunk .card:hover {
-  background: #fce4ec;
-}
-body.light-theme.theme-cyberpunk .slider {
-  background: #ff4081;
-}
-body.light-theme.theme-cyberpunk input:checked + .slider {
-  background: #ff006e;
-}
-body.light-theme.theme-cyberpunk .settings-label,
-body.light-theme.theme-cyberpunk .section-title,
-body.light-theme.theme-cyberpunk h1 {
-  color: #d5006d;
-}
-body.light-theme.theme-cyberpunk .settings-label,
-body.light-theme.theme-cyberpunk .section-title span,
-body.light-theme.theme-cyberpunk h1,
-body.light-theme.theme-cyberpunk .version-number,
-body.light-theme.theme-cyberpunk .github-link,
-body.light-theme.theme-cyberpunk .card span {
-  color: #880e4f !important;
-}
 
 /* Aurora Theme */
 body.theme-aurora {
@@ -2133,4 +2183,324 @@ body.light-theme.theme-sakura .version-number,
 body.light-theme.theme-sakura .github-link,
 body.light-theme.theme-sakura .card span {
   color: #4a0024 !important;
+}
+
+/* ============================================ */
+/* SAKURA PARTICLES */
+/* ============================================ */
+
+.sakura-particles-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+  overflow: hidden;
+}
+
+.sakura-petal {
+  position: absolute;
+  top: -20px;
+  opacity: 0.8;
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+
+.sakura-petal::before {
+  content: '';
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #ffb7c5 0%, #ff69b4 50%, #ffc0cb 100%);
+  border-radius: 80% 0 80% 0;
+  transform: rotate(45deg);
+  box-shadow: 0 0 4px rgba(255, 105, 180, 0.3);
+}
+
+.sakura-petal.white::before {
+  background: linear-gradient(135deg, #fff0f5 0%, #ffe4e1 50%, #ffffff 100%);
+  box-shadow: 0 0 4px rgba(255, 240, 245, 0.4);
+}
+
+.sakura-petal.dark::before {
+  background: linear-gradient(135deg, #ff85c1 0%, #ff1493 50%, #ff69b4 100%);
+  box-shadow: 0 0 6px rgba(255, 20, 147, 0.5);
+}
+
+@keyframes sakuraFall {
+  0% {
+    transform: translateY(0) translateX(0) rotate(0deg);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.9;
+  }
+  90% {
+    opacity: 0.7;
+  }
+  100% {
+    transform: translateY(320px) translateX(60px) rotate(360deg);
+    opacity: 0;
+  }
+}
+
+@keyframes sakuraSway {
+  0%, 100% {
+    margin-left: 0;
+  }
+  25% {
+    margin-left: 15px;
+  }
+  75% {
+    margin-left: -15px;
+  }
+}
+
+@keyframes sakuraSwayWide {
+  0%, 100% {
+    margin-left: 0;
+  }
+  25% {
+    margin-left: 30px;
+  }
+  75% {
+    margin-left: -25px;
+  }
+}
+
+/* Scrollbar consistency for all dark theme presets */
+body.theme-sunset *,
+body.theme-ocean *,
+body.theme-forest *,
+body.theme-midnight *,
+body.theme-coffee *,
+body.theme-aurora *,
+body.theme-sakura *,
+body.theme-old * {
+  scrollbar-color: #222222 rgba(255, 255, 255, 0.05);
+}
+
+/* Scrollbar consistency for all light theme presets */
+body.light-theme.theme-sunset *,
+body.light-theme.theme-ocean *,
+body.light-theme.theme-forest *,
+body.light-theme.theme-midnight *,
+body.light-theme.theme-coffee *,
+body.light-theme.theme-aurora *,
+body.light-theme.theme-sakura *,
+body.light-theme.theme-old * {
+  scrollbar-color: #cccccc rgba(0, 0, 0, 0.05);
+}
+
+/* ============================================ */
+/* HOTKEY UI */
+/* ============================================ */
+
+.add-hotkey-btn {
+  background: rgba(62, 166, 255, 0.14);
+  border: 1px solid rgba(62, 166, 255, 0.35);
+  color: #3ea6ff;
+  border-radius: 10px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.add-hotkey-btn:hover {
+  background: rgba(62, 166, 255, 0.22);
+  transform: translateY(-1px);
+}
+
+.hotkey-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+  animation: fadeInUp 0.25s ease-out;
+}
+
+.hotkey-input {
+  width: 100%;
+  padding: 10px 12px;
+  background: #2a2a2a;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  color: white;
+  font-size: 12px;
+  box-sizing: border-box;
+  transition: border-color 0.2s ease;
+}
+
+.hotkey-input:focus {
+  border-color: #3ea6ff;
+  outline: none;
+}
+
+.hotkey-input::placeholder {
+  opacity: 0.5;
+}
+
+.hotkey-form-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.hotkey-btn {
+  flex: 1;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.hotkey-btn.primary {
+  background: #3ea6ff;
+  color: white;
+}
+
+.hotkey-btn.primary:hover {
+  background: #2a8ee6;
+  transform: translateY(-1px);
+}
+
+.hotkey-btn.secondary {
+  background: rgba(255, 255, 255, 0.08);
+  color: #aaa;
+}
+
+.hotkey-btn.secondary:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+}
+
+.hotkeys-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.hotkey-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 12px;
+}
+
+.hotkey-item-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  background: rgba(62, 166, 255, 0.18);
+  border: 1px solid rgba(62, 166, 255, 0.3);
+  border-radius: 6px;
+  color: #3ea6ff;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: monospace;
+  padding: 0 6px;
+}
+
+.hotkey-item-url {
+  color: #ccc;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 140px;
+  margin-left: 8px;
+  font-size: 11px;
+}
+
+.hotkey-item-delete {
+  background: transparent;
+  border: none;
+  color: #888;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 14px;
+  line-height: 1;
+  transition: all 0.15s ease;
+}
+
+.hotkey-item-delete:hover {
+  color: #dc3545;
+  background: rgba(220, 53, 69, 0.1);
+}
+
+.hotkey-item.hotkey-item-default {
+  background: rgba(62, 166, 255, 0.06);
+  border-color: rgba(62, 166, 255, 0.15);
+}
+
+/* Light theme hotkey UI */
+body.light-theme .hotkey-input {
+  background: #f5f5f5;
+  border-color: rgba(0, 0, 0, 0.1);
+  color: #1a1a1a;
+}
+
+body.light-theme .hotkey-input:focus {
+  border-color: #4a90e2;
+}
+
+body.light-theme .add-hotkey-btn {
+  background: rgba(74, 144, 226, 0.1);
+  border-color: rgba(74, 144, 226, 0.3);
+  color: #4a90e2;
+}
+
+body.light-theme .add-hotkey-btn:hover {
+  background: rgba(74, 144, 226, 0.2);
+}
+
+body.light-theme .hotkey-btn.primary {
+  background: #4a90e2;
+}
+
+body.light-theme .hotkey-btn.primary:hover {
+  background: #3a7bc8;
+}
+
+body.light-theme .hotkey-btn.secondary {
+  background: rgba(0, 0, 0, 0.05);
+  color: #888;
+}
+
+body.light-theme .hotkey-btn.secondary:hover {
+  background: rgba(0, 0, 0, 0.1);
+  color: #333;
+}
+
+body.light-theme .hotkey-item {
+  background: rgba(0, 0, 0, 0.02);
+  border-color: rgba(0, 0, 0, 0.06);
+}
+
+body.light-theme .hotkey-item-kbd {
+  background: rgba(74, 144, 226, 0.12);
+  border-color: rgba(74, 144, 226, 0.25);
+  color: #4a90e2;
+}
+
+body.light-theme .hotkey-item-url {
+  color: #555;
+}
+
+body.light-theme .hotkey-item.hotkey-item-default {
+  background: rgba(74, 144, 226, 0.06);
+  border-color: rgba(74, 144, 226, 0.15);
 }

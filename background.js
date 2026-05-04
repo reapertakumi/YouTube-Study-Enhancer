@@ -67,3 +67,15 @@ chrome.tabs.onCreated.addListener((tab) => {
 chrome.tabs.onRemoved.addListener((tabId) => {
   injectedTabs.delete(tabId);
 });
+
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === 'openHotkeyUrl' && request.url) {
+    chrome.tabs.create({ url: request.url }, (tab) => {
+      if (chrome.runtime.lastError) {
+        console.error('Failed to open hotkey URL:', chrome.runtime.lastError.message);
+      } else {
+        console.log('Opened hotkey URL in new tab:', tab.id);
+      }
+    });
+  }
+});

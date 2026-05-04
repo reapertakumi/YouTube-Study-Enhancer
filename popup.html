@@ -4,6 +4,7 @@
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
+  <div class="sakura-particles-container" id="sakuraParticles"></div>
   <div class="app">
     <div class="header">
       <div class="logo">
@@ -166,11 +167,46 @@
       </div>
       
       <div class="settings-tab-bar">
-        <button class="settings-tab-btn active" data-tab="general">General</button>
-        <button class="settings-tab-btn" data-tab="youtube">YouTube</button>
+        <button class="settings-tab-btn active" data-tab="general"><span>General</span></button>
+        <button class="settings-tab-btn" data-tab="appearance"><span>Appearance</span></button>
+        <button class="settings-tab-btn" data-tab="hotkey"><span>Hotkey</span></button>
+        <div class="settings-tab-underline"></div>
       </div>
       
       <div class="settings-tab-content active" id="generalTab">
+        <div class="settings-section">
+          <div class="settings-item-row">
+            <span class="settings-label">Video Feed Mode</span>
+            <div class="settings-toggle-group">
+              <button class="toggle-option" data-feedmode="remove" data-tooltip="Removes the feed and expands the video.">Remove</button>
+              <button class="toggle-option" data-feedmode="hide" data-tooltip="Hides the feed and keeps the original player size.">Hide</button>
+            </div>
+          </div>
+        </div>
+        
+        <div class="settings-section">
+          <button id="changePasswordBtn" class="change-password-btn">Change Password</button>
+        </div>
+        
+        <div class="settings-section">
+          <div class="settings-item-row">
+            <button id="revertToDefaultBtn" class="revert-default-btn">Revert to Default</button>
+          </div>
+        </div>
+        
+        <div class="settings-section">
+          <div class="settings-version-row">
+            <span class="settings-label">Current Version</span>
+            <span id="settingsVersion" class="settings-version-value">0.3.0</span>
+          </div>
+          <div class="settings-version-row">
+            <span class="settings-label">GitHub Version</span>
+            <a id="githubVersionLink" href="https://github.com/reapertakumi/YouTube-Study-Enhancer" target="_blank" class="settings-version-value" style="text-decoration: none; cursor: pointer;">--</a>
+          </div>
+        </div>
+      </div>
+      
+      <div class="settings-tab-content" id="appearanceTab">
         <div class="settings-section">
           <div class="settings-item-row">
             <span class="settings-label">Theme</span>
@@ -186,12 +222,12 @@
             <span class="settings-label">Theme Preset</span>
             <select id="themePresetSelect" class="settings-font-select">
               <option value="default">Default</option>
+              <option value="old">Old</option>
               <option value="sunset">Sunset / Sunrise</option>
               <option value="ocean">Ocean</option>
               <option value="forest">Forest</option>
               <option value="midnight">Midnight</option>
               <option value="coffee">Coffee</option>
-              <option value="cyberpunk">Cyberpunk</option>
               <option value="aurora">Aurora</option>
               <option value="sakura">Sakura</option>
             </select>
@@ -217,38 +253,31 @@
         </div>
         
         <div class="settings-section">
-          <button id="changePasswordBtn" class="change-password-btn">Change Password</button>
-        </div>
-        
-        <div class="settings-section">
-          <button id="revertToDefaultBtn" class="revert-default-btn">Revert to Default</button>
-          <div class="revert-description">Reset all settings to factory defaults</div>
-        </div>
-        
-        <div class="settings-section">
-          <div class="settings-version-row">
-            <span class="settings-label">Current Version</span>
-            <span id="settingsVersion" class="settings-version-value">0.3.0</span>
-          </div>
-          <div class="settings-version-row">
-            <span class="settings-label">GitHub Version</span>
-            <a id="githubVersionLink" href="https://github.com/reapertakumi/YouTube-Study-Enhancer" target="_blank" class="settings-version-value" style="text-decoration: none; cursor: pointer;">--</a>
+          <div class="settings-item-row">
+            <span class="settings-label">Particles</span>
+            <label class="switch">
+              <input type="checkbox" id="particleToggle">
+              <span class="slider"></span>
+            </label>
           </div>
         </div>
       </div>
       
-      <div class="settings-tab-content" id="youtubeTab">
+      <div class="settings-tab-content" id="hotkeyTab">
         <div class="settings-section">
           <div class="settings-item-row">
-            <span class="settings-label">Video Feed Mode</span>
-            <div class="settings-toggle-group">
-              <button class="toggle-option" data-feedmode="remove">Remove</button>
-              <button class="toggle-option" data-feedmode="hide">Hide</button>
+            <span class="settings-label">Hotkeys</span>
+            <button id="addHotkeyBtn" class="add-hotkey-btn">Add</button>
+          </div>
+          <div id="hotkeyForm" class="hotkey-form" style="display: none;">
+            <input type="text" id="hotkeyUrl" class="hotkey-input" placeholder="Website URL (e.g. https://google.com)">
+            <input type="text" id="hotkeyKey" class="hotkey-input" placeholder="Press key combo (e.g. Shift+G)" readonly>
+            <div class="hotkey-form-buttons">
+              <button id="cancelHotkeyBtn" class="hotkey-btn secondary">Cancel</button>
+              <button id="saveHotkeyBtn" class="hotkey-btn primary">Save</button>
             </div>
           </div>
-          <div class="settings-description" id="settingsModeDescription">
-            Remove Mode: Removes feed and expands video
-          </div>
+          <div id="hotkeysList" class="hotkeys-list"></div>
         </div>
       </div>
     </div>

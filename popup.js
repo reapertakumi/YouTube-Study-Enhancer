@@ -55,7 +55,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }, 100);
   });
   
-  storage.sync.get([...allIds, "hideFeedMode", "theme", "youtubeCollapsed", "blockCollapsed", "fontFamily", "themePreset"], (data) => {
+  storage.sync.get([...allIds, "hideFeedMode", "theme", "youtubeCollapsed", "blockCollapsed", "fontFamily", "themePreset", "particlesEnabled"], (data) => {
     console.log("Loaded settings:", data);
     
     allIds.forEach(id => {
@@ -70,6 +70,10 @@ document.addEventListener("DOMContentLoaded", () => {
     
     const savedPreset = data.themePreset || 'default';
     applyThemePreset(savedPreset);
+    
+    if (data.particlesEnabled === true && savedPreset === 'sakura') {
+      startSakuraParticles();
+    }
     
     const youtubeContent = document.getElementById('youtubeContent');
     const blockContent = document.getElementById('blockContent');
@@ -107,6 +111,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   loadCustomDomains();
   loadDefaultSites();
+
+  document.addEventListener('keydown', handleHotkeyPress);
 
   allIds.forEach(id => {
     const element = document.getElementById(id);
@@ -222,8 +228,8 @@ function applyFontToPopup(fontFamily) {
 
 function applyThemePreset(preset) {
   const presetClasses = [
-    'theme-default', 'theme-sunset', 'theme-ocean', 'theme-forest', 
-    'theme-midnight', 'theme-coffee', 'theme-cyberpunk', 'theme-aurora', 'theme-sakura'
+    'theme-default', 'theme-sunset', 'theme-ocean', 'theme-forest',
+    'theme-midnight', 'theme-coffee', 'theme-aurora', 'theme-sakura', 'theme-old'
   ];
   presetClasses.forEach(className => {
     document.body.classList.remove(className);
@@ -234,6 +240,14 @@ function applyThemePreset(preset) {
   }
   
   storage.sync.set({ themePreset: preset });
+  
+  storage.sync.get(['particlesEnabled'], (data) => {
+    if (data.particlesEnabled === true && preset === 'sakura') {
+      startSakuraParticles();
+    } else {
+      stopSakuraParticles();
+    }
+  });
 }
 
 function updateLockUI() {
@@ -1008,6 +1022,17 @@ function openSettingsModal() {
     settingsModal.style.display = 'flex';
     settingsModalOpen = true;
     loadSettingsModalValues();
+    requestAnimationFrame(() => {
+      const tabUnderline = document.querySelector('.settings-tab-underline');
+      const activeBtn = document.querySelector('.settings-tab-btn.active');
+      if (tabUnderline && activeBtn) {
+        const activeSpan = activeBtn.querySelector('span');
+        const barRect = activeBtn.parentElement.getBoundingClientRect();
+        const spanRect = activeSpan.getBoundingClientRect();
+        tabUnderline.style.width = `${spanRect.width}px`;
+        tabUnderline.style.left = `${spanRect.left - barRect.left}px`;
+      }
+    });
   }
 }
 
@@ -1019,8 +1044,16 @@ function closeSettingsModal() {
   }
 }
 
+function updateToggleGroupPosition(group) {
+  if (!group) return;
+  const buttons = Array.from(group.querySelectorAll('.toggle-option'));
+  const activeIndex = buttons.findIndex(btn => btn.classList.contains('active'));
+  group.classList.toggle('toggle-selected-right', activeIndex === 1);
+  group.classList.toggle('toggle-selected-left', activeIndex === 0);
+}
+
 function loadSettingsModalValues() {
-  storage.sync.get(['theme', 'hideFeedMode', 'fontFamily', 'themePreset'], (data) => {
+  storage.sync.get(['theme', 'hideFeedMode', 'fontFamily', 'themePreset', 'particlesEnabled'], (data) => {
     const darkThemeBtn = document.querySelector('.toggle-option[data-theme="dark"]');
     const lightThemeBtn = document.querySelector('.toggle-option[data-theme="light"]');
     
@@ -1045,20 +1078,23 @@ function loadSettingsModalValues() {
     
     const removeFeedBtn = document.querySelector('.toggle-option[data-feedmode="remove"]');
     const hideFeedBtn = document.querySelector('.toggle-option[data-feedmode="hide"]');
-    const settingsModeDescription = document.getElementById('settingsModeDescription');
     
     if (data.hideFeedMode === 'hide') {
       hideFeedBtn?.classList.add('active');
       removeFeedBtn?.classList.remove('active');
-      if (settingsModeDescription) {
-        settingsModeDescription.textContent = 'Hide Mode: Hides feed but keeps original video size';
-      }
     } else {
       removeFeedBtn?.classList.add('active');
       hideFeedBtn?.classList.remove('active');
-      if (settingsModeDescription) {
-        settingsModeDescription.textContent = 'Remove Mode: Removes feed and expands video to full width';
-      }
+    }
+
+    const themeToggleGroup = darkThemeBtn?.closest('.settings-toggle-group');
+    const feedModeGroup = removeFeedBtn?.closest('.settings-toggle-group');
+    updateToggleGroupPosition(themeToggleGroup);
+    updateToggleGroupPosition(feedModeGroup);
+
+    const particleToggle = document.getElementById('particleToggle');
+    if (particleToggle) {
+      particleToggle.checked = data.particlesEnabled === true;
     }
   });
 }
@@ -1115,7 +1151,8 @@ function resetToDefaultSettings() {
     customPassword: null,
     isLocked: false,
     youtubeCollapsed: false,
-    blockCollapsed: false
+    blockCollapsed: false,
+    hotkeys: []
   };
   
   storage.sync.clear(() => {
@@ -1148,20 +1185,13 @@ function resetToDefaultSettings() {
       
       const removeFeedBtn = document.querySelector('.toggle-option[data-feedmode="remove"]');
       const hideFeedBtn = document.querySelector('.toggle-option[data-feedmode="hide"]');
-      const settingsModeDescription = document.getElementById('settingsModeDescription');
       
       if (defaultSettings.hideFeedMode === 'hide') {
         hideFeedBtn?.classList.add('active');
         removeFeedBtn?.classList.remove('active');
-        if (settingsModeDescription) {
-          settingsModeDescription.textContent = 'Hide Mode: Hides feed but keeps original video size';
-        }
       } else {
         removeFeedBtn?.classList.add('active');
         hideFeedBtn?.classList.remove('active');
-        if (settingsModeDescription) {
-          settingsModeDescription.textContent = 'Remove Mode: Removes feed and expands video to full width';
-        }
       }
       
       const confirmModal = document.getElementById('confirmResetModal');
@@ -1256,6 +1286,8 @@ function setupSettingsModal() {
       if (!darkThemeBtn.classList.contains('active')) {
         darkThemeBtn.classList.add('active');
         lightThemeBtn?.classList.remove('active');
+        const themeToggleGroup = darkThemeBtn.closest('.settings-toggle-group');
+        updateToggleGroupPosition(themeToggleGroup);
         saveTheme('dark');
       }
     });
@@ -1266,6 +1298,8 @@ function setupSettingsModal() {
       if (!lightThemeBtn.classList.contains('active')) {
         lightThemeBtn.classList.add('active');
         darkThemeBtn?.classList.remove('active');
+        const themeToggleGroup = lightThemeBtn.closest('.settings-toggle-group');
+        updateToggleGroupPosition(themeToggleGroup);
         saveTheme('light');
       }
     });
@@ -1287,16 +1321,15 @@ function setupSettingsModal() {
   
   const removeFeedBtn = document.querySelector('.toggle-option[data-feedmode="remove"]');
   const hideFeedBtn = document.querySelector('.toggle-option[data-feedmode="hide"]');
-  const settingsModeDescription = document.getElementById('settingsModeDescription');
+  const particleToggle = document.getElementById('particleToggle');
   
   if (removeFeedBtn) {
     removeFeedBtn.addEventListener('click', () => {
       if (!removeFeedBtn.classList.contains('active')) {
         removeFeedBtn.classList.add('active');
         hideFeedBtn?.classList.remove('active');
-        if (settingsModeDescription) {
-          settingsModeDescription.textContent = 'Remove Mode: Removes feed and expands video to full width';
-        }
+        const feedModeGroup = removeFeedBtn.closest('.settings-toggle-group');
+        updateToggleGroupPosition(feedModeGroup);
         saveFeedMode('remove');
       }
     });
@@ -1307,10 +1340,21 @@ function setupSettingsModal() {
       if (!hideFeedBtn.classList.contains('active')) {
         hideFeedBtn.classList.add('active');
         removeFeedBtn?.classList.remove('active');
-        if (settingsModeDescription) {
-          settingsModeDescription.textContent = 'Hide Mode: Hides feed but keeps original video size';
-        }
+        const feedModeGroup = hideFeedBtn.closest('.settings-toggle-group');
+        updateToggleGroupPosition(feedModeGroup);
         saveFeedMode('hide');
+      }
+    });
+  }
+  
+  if (particleToggle) {
+    particleToggle.addEventListener('change', () => {
+      storage.sync.set({ particlesEnabled: particleToggle.checked });
+      const currentPreset = document.body.classList.contains('theme-sakura') ? 'sakura' : '';
+      if (particleToggle.checked && currentPreset === 'sakura') {
+        startSakuraParticles();
+      } else {
+        stopSakuraParticles();
       }
     });
   }
@@ -1329,7 +1373,59 @@ function setupSettingsModal() {
     });
   }
   
+  // Hotkey UI
+  const addHotkeyBtn = document.getElementById('addHotkeyBtn');
+  const hotkeyForm = document.getElementById('hotkeyForm');
+  const cancelHotkeyBtn = document.getElementById('cancelHotkeyBtn');
+  const saveHotkeyBtn = document.getElementById('saveHotkeyBtn');
+  const hotkeyUrl = document.getElementById('hotkeyUrl');
+  const hotkeyKey = document.getElementById('hotkeyKey');
+
+  if (addHotkeyBtn && hotkeyForm) {
+    addHotkeyBtn.addEventListener('click', () => {
+      hotkeyForm.style.display = hotkeyForm.style.display === 'none' ? 'flex' : 'none';
+      if (hotkeyForm.style.display !== 'none' && hotkeyUrl) {
+        hotkeyUrl.focus();
+      }
+    });
+  }
+
+  if (cancelHotkeyBtn && hotkeyForm) {
+    cancelHotkeyBtn.addEventListener('click', () => {
+      hotkeyForm.style.display = 'none';
+      if (hotkeyUrl) hotkeyUrl.value = '';
+      if (hotkeyKey) hotkeyKey.value = '';
+    });
+  }
+
+  if (saveHotkeyBtn && hotkeyForm) {
+    saveHotkeyBtn.addEventListener('click', () => {
+      saveHotkeyMapping();
+    });
+  }
+
+  if (hotkeyKey) {
+    hotkeyKey.addEventListener('keydown', (e) => {
+      e.preventDefault();
+      hotkeyKey.value = normalizeKeyCombo(e);
+    });
+  }
+
+  loadHotkeysList();
+
+  const tabUnderline = document.querySelector('.settings-tab-underline');
   const tabBtns = document.querySelectorAll('.settings-tab-btn');
+  const updateTabUnderline = () => {
+    const activeBtn = document.querySelector('.settings-tab-btn.active');
+    if (!activeBtn || !tabUnderline) return;
+    const activeSpan = activeBtn.querySelector('span');
+    if (!activeSpan) return;
+    const barRect = activeBtn.parentElement.getBoundingClientRect();
+    const spanRect = activeSpan.getBoundingClientRect();
+    tabUnderline.style.width = `${spanRect.width}px`;
+    tabUnderline.style.left = `${spanRect.left - barRect.left}px`;
+  };
+
   tabBtns.forEach(btn => {
     btn.addEventListener('click', () => {
       const tabName = btn.getAttribute('data-tab');
@@ -1342,9 +1438,269 @@ function setupSettingsModal() {
       
       if (tabName === 'general') {
         document.getElementById('generalTab').classList.add('active');
-      } else if (tabName === 'youtube') {
-        document.getElementById('youtubeTab').classList.add('active');
+      } else if (tabName === 'appearance') {
+        document.getElementById('appearanceTab').classList.add('active');
+      } else if (tabName === 'hotkey') {
+        document.getElementById('hotkeyTab').classList.add('active');
       }
+      updateTabUnderline();
     });
   });
+
+  updateTabUnderline();
+  window.addEventListener('resize', updateTabUnderline);
+
+  // Tooltip functionality
+  const tooltipElements = document.querySelectorAll('.toggle-option[data-tooltip]');
+  tooltipElements.forEach(el => {
+    let timeout;
+    el.addEventListener('mouseenter', () => {
+      timeout = setTimeout(() => {
+        const tooltip = document.createElement('div');
+        tooltip.className = 'tooltip';
+        tooltip.textContent = el.dataset.tooltip;
+        document.body.appendChild(tooltip);
+        const rect = el.getBoundingClientRect();
+        tooltip.style.left = (rect.left + rect.width / 2 - tooltip.offsetWidth / 2) + 'px';
+        tooltip.style.top = (rect.bottom + 5) + 'px';
+      }, 1000);
+    });
+    el.addEventListener('mouseleave', () => {
+      clearTimeout(timeout);
+      const tooltip = document.querySelector('.tooltip');
+      if (tooltip) tooltip.remove();
+    });
+  });
+}
+
+/* ============================================ */
+/* SAKURA PARTICLES */
+/* ============================================ */
+
+let sakuraInterval = null;
+let sakuraPetals = [];
+
+function startSakuraParticles() {
+  if (sakuraInterval) return;
+  
+  const container = document.getElementById('sakuraParticles');
+  if (!container) return;
+  
+  const isLight = document.body.classList.contains('light-theme');
+  
+  // Spawn a petal every 300-800ms
+  sakuraInterval = setInterval(() => {
+    createSakuraPetal(container, isLight);
+  }, 300 + Math.random() * 500);
+  
+  // Spawn initial batch
+  for (let i = 0; i < 5; i++) {
+    setTimeout(() => createSakuraPetal(container, isLight), i * 200);
+  }
+}
+
+function stopSakuraParticles() {
+  if (sakuraInterval) {
+    clearInterval(sakuraInterval);
+    sakuraInterval = null;
+  }
+  const container = document.getElementById('sakuraParticles');
+  if (container) {
+    container.innerHTML = '';
+  }
+  sakuraPetals = [];
+}
+
+function createSakuraPetal(container, isLight) {
+  const petal = document.createElement('div');
+  const size = 6 + Math.random() * 10;
+  const startLeft = Math.random() * 100;
+  const duration = 4 + Math.random() * 5;
+  const delay = Math.random() * 2;
+  const swayType = Math.random() > 0.5 ? 'sakuraSway' : 'sakuraSwayWide';
+  const variant = Math.random();
+  
+  petal.classList.add('sakura-petal');
+  if (isLight) {
+    petal.classList.add('white');
+  } else if (variant > 0.7) {
+    petal.classList.add('dark');
+  }
+  
+  petal.style.left = `${startLeft}%`;
+  petal.style.width = `${size}px`;
+  petal.style.height = `${size}px`;
+  petal.style.animation = `sakuraFall ${duration}s linear ${delay}s forwards, ${swayType} ${duration * 0.8}s ease-in-out ${delay}s infinite`;
+  petal.style.opacity = 0.6 + Math.random() * 0.4;
+  
+  container.appendChild(petal);
+  sakuraPetals.push(petal);
+  
+  // Remove after animation completes
+  setTimeout(() => {
+    if (petal.parentNode) {
+      petal.remove();
+    }
+    sakuraPetals = sakuraPetals.filter(p => p !== petal);
+  }, (duration + delay) * 1000);
+}
+
+/* ============================================ */
+/* HOTKEY FUNCTIONS */
+/* ============================================ */
+
+function saveHotkeyMapping() {
+  const urlInput = document.getElementById('hotkeyUrl');
+  const keyInput = document.getElementById('hotkeyKey');
+  const hotkeyForm = document.getElementById('hotkeyForm');
+
+  if (!urlInput || !keyInput) return;
+
+  let url = urlInput.value.trim();
+  const key = keyInput.value.trim();
+
+  if (!url || !key) return;
+
+  // Reject bare modifier keys
+  if (['Ctrl', 'Alt', 'Shift', 'Meta'].includes(key)) return;
+
+  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    url = 'https://' + url;
+  }
+
+  storage.sync.get(['hotkeys'], (data) => {
+    const hotkeys = data.hotkeys || [];
+    hotkeys.push({ url, key });
+    storage.sync.set({ hotkeys }, () => {
+      urlInput.value = '';
+      keyInput.value = '';
+      if (hotkeyForm) hotkeyForm.style.display = 'none';
+      loadHotkeysList();
+    });
+  });
+}
+
+function loadHotkeysList() {
+  const list = document.getElementById('hotkeysList');
+  if (!list) return;
+
+  const svgX = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width:14px;height:14px;stroke:currentColor;stroke-width:2;"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>`;
+
+  storage.sync.get(['hotkeys'], (data) => {
+    const hotkeys = data.hotkeys || [];
+    list.innerHTML = '';
+
+    // Default non-deletable entry: Open Extension
+    if (chrome.commands && chrome.commands.getAll) {
+      chrome.commands.getAll((commands) => {
+        const openCmd = commands.find(c => c.name === '_execute_action');
+        const shortcut = openCmd && openCmd.shortcut ? openCmd.shortcut : 'Ctrl+Shift+Y';
+
+        const defaultItem = document.createElement('div');
+        defaultItem.className = 'hotkey-item hotkey-item-default';
+        defaultItem.innerHTML = `
+          <div style="display:flex;align-items:center;flex:1;min-width:0;">
+            <span class="hotkey-item-kbd">${escapeHtml(shortcut)}</span>
+            <span class="hotkey-item-url">Open Extension</span>
+          </div>
+        `;
+        list.appendChild(defaultItem);
+
+        renderUserHotkeys(list, hotkeys, svgX);
+      });
+    } else {
+      renderUserHotkeys(list, hotkeys, svgX);
+    }
+  });
+}
+
+function renderUserHotkeys(list, hotkeys, svgX) {
+  hotkeys.forEach((hk, index) => {
+    const item = document.createElement('div');
+    item.className = 'hotkey-item';
+    item.innerHTML = `
+      <div style="display:flex;align-items:center;flex:1;min-width:0;">
+        <span class="hotkey-item-kbd">${escapeHtml(hk.key)}</span>
+        <span class="hotkey-item-url" title="${escapeHtml(hk.url)}">${escapeHtml(hk.url)}</span>
+      </div>
+      <button class="hotkey-item-delete" data-index="${index}">${svgX}</button>
+    `;
+    list.appendChild(item);
+  });
+
+  list.querySelectorAll('.hotkey-item-delete').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = parseInt(btn.dataset.index, 10);
+      deleteHotkey(idx);
+    });
+  });
+}
+
+function deleteHotkey(index) {
+  storage.sync.get(['hotkeys'], (data) => {
+    const hotkeys = data.hotkeys || [];
+    hotkeys.splice(index, 1);
+    storage.sync.set({ hotkeys }, () => {
+      loadHotkeysList();
+    });
+  });
+}
+
+function handleHotkeyPress(e) {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+  const combo = normalizeKeyCombo(e);
+  if (!combo) return;
+
+  storage.sync.get(['hotkeys'], (data) => {
+    const hotkeys = data.hotkeys || [];
+    const match = hotkeys.find(hk => hk.key === combo);
+    if (match && match.url) {
+      chrome.tabs.create({ url: match.url });
+    }
+  });
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function normalizeKeyCombo(e) {
+  const modMap = {
+    'Control': 'Ctrl',
+    'Alt': 'Alt',
+    'Shift': 'Shift',
+    'Meta': 'Meta'
+  };
+
+  const heldMods = [];
+  if (e.ctrlKey) heldMods.push('Ctrl');
+  if (e.altKey) heldMods.push('Alt');
+  if (e.metaKey) heldMods.push('Meta');
+  if (e.shiftKey) heldMods.push('Shift');
+
+  let key = e.key;
+  if (key.length === 1) {
+    key = key.toUpperCase();
+  }
+
+  // Bare modifier press (only that modifier is held): show short name for feedback
+  if (modMap[key] && heldMods.length === 1) {
+    return modMap[key];
+  }
+
+  // Modifier held + another modifier pressed: show all held modifiers
+  // e.g. Ctrl held, Shift pressed -> "Ctrl+Shift"
+  if (modMap[key]) {
+    return heldMods.join('+');
+  }
+
+  // Non-modifier key
+  if (heldMods.length === 0) {
+    return key;
+  }
+
+  return heldMods.join('+') + '+' + key;
 }

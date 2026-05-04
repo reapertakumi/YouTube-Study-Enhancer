@@ -1,12 +1,13 @@
 {
   "manifest_version": 3,
   "name": "YouTube Study Enhancer",
-  "version": "0.3.9",
+  "version": "0.4.0",
   "description": "Enhance your YouTube studying experience and block distracting sites with custom redirection",
   "permissions": [
     "storage",
     "scripting",
-    "activeTab"
+    "activeTab",
+    "tabs"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -41,6 +42,14 @@
       "all_frames": true
     }
   ],
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+Y"
+      },
+      "description": "Open the YouTube Study Enhancer popup"
+    }
+  },
   "web_accessible_resources": [
     {
       "resources": [

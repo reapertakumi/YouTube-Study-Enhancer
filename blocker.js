@@ -62,4 +62,65 @@
   window.addEventListener('popstate', () => {
     setTimeout(checkAndRedirect, 100);
   });
+
+  // Global hotkey listener — works even when popup is closed
+  // Use window + capture phase so page JS can't stopPropagation the event
+  window.addEventListener('keydown', (e) => {
+    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable)) return;
+
+    const combo = normalizeKeyCombo(e);
+    if (!combo) return;
+
+    console.log('[YouTube Study Enhancer] Hotkey combo pressed:', combo);
+
+    storage.sync.get(['hotkeys'], (data) => {
+      const hotkeys = data.hotkeys || [];
+      console.log('[YouTube Study Enhancer] Stored hotkeys:', hotkeys);
+      const match = hotkeys.find(hk => hk.key === combo);
+      if (match && match.url) {
+        console.log('[YouTube Study Enhancer] Match found, sending to background:', match.url);
+        try {
+          chrome.runtime.sendMessage({ action: 'openHotkeyUrl', url: match.url });
+        } catch (err) {
+          console.error('[YouTube Study Enhancer] sendMessage failed:', err);
+        }
+      } else {
+        console.log('[YouTube Study Enhancer] No match for combo:', combo);
+      }
+    });
+  }, { capture: true });
+
+  function normalizeKeyCombo(e) {
+    const modMap = {
+      'Control': 'Ctrl',
+      'Alt': 'Alt',
+      'Shift': 'Shift',
+      'Meta': 'Meta'
+    };
+
+    const heldMods = [];
+    if (e.ctrlKey) heldMods.push('Ctrl');
+    if (e.altKey) heldMods.push('Alt');
+    if (e.metaKey) heldMods.push('Meta');
+    if (e.shiftKey) heldMods.push('Shift');
+
+    let key = e.key;
+    if (key.length === 1) {
+      key = key.toUpperCase();
+    }
+
+    if (modMap[key] && heldMods.length === 1) {
+      return modMap[key];
+    }
+
+    if (modMap[key]) {
+      return heldMods.join('+');
+    }
+
+    if (heldMods.length === 0) {
+      return key;
+    }
+
+    return heldMods.join('+') + '+' + key;
+  }
 })();
