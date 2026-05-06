@@ -1,13 +1,15 @@
 {
   "manifest_version": 3,
   "name": "YouTube Study Enhancer",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Enhance your YouTube studying experience and block distracting sites with custom redirection",
   "permissions": [
     "storage",
     "scripting",
     "activeTab",
-    "tabs"
+    "tabs",
+    "contextMenus",
+    "downloads"
   ],
   "host_permissions": [
     "<all_urls>"

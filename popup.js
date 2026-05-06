@@ -12,6 +12,7 @@ let isFirstTimeLock = true;
 
 let domainModalOverlay = null;
 let isLocked = false;
+let editingHotkeyIndex = null;
 
 // Default blockable sites configuration
 const DEFAULT_BLOCK_SITES = [
@@ -1383,9 +1384,19 @@ function setupSettingsModal() {
 
   if (addHotkeyBtn && hotkeyForm) {
     addHotkeyBtn.addEventListener('click', () => {
-      hotkeyForm.style.display = hotkeyForm.style.display === 'none' ? 'flex' : 'none';
-      if (hotkeyForm.style.display !== 'none' && hotkeyUrl) {
-        hotkeyUrl.focus();
+      if (hotkeyForm.style.display === 'none') {
+        hotkeyForm.style.display = 'flex';
+        editingHotkeyIndex = null;
+        if (saveHotkeyBtn) saveHotkeyBtn.textContent = 'Save';
+        if (hotkeyUrl) {
+          hotkeyUrl.value = '';
+          hotkeyUrl.focus();
+        }
+        if (hotkeyKey) hotkeyKey.value = '';
+      } else {
+        hotkeyForm.style.display = 'none';
+        editingHotkeyIndex = null;
+        if (saveHotkeyBtn) saveHotkeyBtn.textContent = 'Save';
       }
     });
   }
@@ -1395,6 +1406,8 @@ function setupSettingsModal() {
       hotkeyForm.style.display = 'none';
       if (hotkeyUrl) hotkeyUrl.value = '';
       if (hotkeyKey) hotkeyKey.value = '';
+      editingHotkeyIndex = null;
+      if (saveHotkeyBtn) saveHotkeyBtn.textContent = 'Save';
     });
   }
 
@@ -1553,6 +1566,7 @@ function saveHotkeyMapping() {
   const urlInput = document.getElementById('hotkeyUrl');
   const keyInput = document.getElementById('hotkeyKey');
   const hotkeyForm = document.getElementById('hotkeyForm');
+  const saveHotkeyBtn = document.getElementById('saveHotkeyBtn');
 
   if (!urlInput || !keyInput) return;
 
@@ -1570,11 +1584,19 @@ function saveHotkeyMapping() {
 
   storage.sync.get(['hotkeys'], (data) => {
     const hotkeys = data.hotkeys || [];
-    hotkeys.push({ url, key });
+
+    if (editingHotkeyIndex !== null && editingHotkeyIndex >= 0 && editingHotkeyIndex < hotkeys.length) {
+      hotkeys[editingHotkeyIndex] = { url, key };
+    } else {
+      hotkeys.push({ url, key });
+    }
+
     storage.sync.set({ hotkeys }, () => {
       urlInput.value = '';
       keyInput.value = '';
       if (hotkeyForm) hotkeyForm.style.display = 'none';
+      if (saveHotkeyBtn) saveHotkeyBtn.textContent = 'Save';
+      editingHotkeyIndex = null;
       loadHotkeysList();
     });
   });
@@ -1585,6 +1607,7 @@ function loadHotkeysList() {
   if (!list) return;
 
   const svgX = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width:14px;height:14px;stroke:currentColor;stroke-width:2;"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>`;
+  const svgPen = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width:14px;height:14px;stroke:currentColor;stroke-width:2;"><path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10"/></svg>`;
 
   storage.sync.get(['hotkeys'], (data) => {
     const hotkeys = data.hotkeys || [];
@@ -1599,33 +1622,43 @@ function loadHotkeysList() {
         const defaultItem = document.createElement('div');
         defaultItem.className = 'hotkey-item hotkey-item-default';
         defaultItem.innerHTML = `
-          <div style="display:flex;align-items:center;flex:1;min-width:0;">
-            <span class="hotkey-item-kbd">${escapeHtml(shortcut)}</span>
+          <div class="hotkey-item-content">
             <span class="hotkey-item-url">Open Extension</span>
+            <span class="hotkey-item-kbd">${escapeHtml(shortcut)}</span>
           </div>
         `;
         list.appendChild(defaultItem);
 
-        renderUserHotkeys(list, hotkeys, svgX);
+        renderUserHotkeys(list, hotkeys, svgX, svgPen);
       });
     } else {
-      renderUserHotkeys(list, hotkeys, svgX);
+      renderUserHotkeys(list, hotkeys, svgX, svgPen);
     }
   });
 }
 
-function renderUserHotkeys(list, hotkeys, svgX) {
+function renderUserHotkeys(list, hotkeys, svgX, svgPen) {
   hotkeys.forEach((hk, index) => {
     const item = document.createElement('div');
     item.className = 'hotkey-item';
     item.innerHTML = `
-      <div style="display:flex;align-items:center;flex:1;min-width:0;">
-        <span class="hotkey-item-kbd">${escapeHtml(hk.key)}</span>
+      <div class="hotkey-item-content">
         <span class="hotkey-item-url" title="${escapeHtml(hk.url)}">${escapeHtml(hk.url)}</span>
+        <span class="hotkey-item-kbd">${escapeHtml(hk.key)}</span>
       </div>
-      <button class="hotkey-item-delete" data-index="${index}">${svgX}</button>
+      <div class="hotkey-item-actions">
+        <button class="hotkey-item-edit" data-index="${index}">${svgPen}</button>
+        <button class="hotkey-item-delete" data-index="${index}">${svgX}</button>
+      </div>
     `;
     list.appendChild(item);
+  });
+
+  list.querySelectorAll('.hotkey-item-edit').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = parseInt(btn.dataset.index, 10);
+      startEditHotkey(idx);
+    });
   });
 
   list.querySelectorAll('.hotkey-item-delete').forEach(btn => {
@@ -1643,6 +1676,26 @@ function deleteHotkey(index) {
     storage.sync.set({ hotkeys }, () => {
       loadHotkeysList();
     });
+  });
+}
+
+function startEditHotkey(index) {
+  const hotkeyUrl = document.getElementById('hotkeyUrl');
+  const hotkeyKey = document.getElementById('hotkeyKey');
+  const hotkeyForm = document.getElementById('hotkeyForm');
+  const saveHotkeyBtn = document.getElementById('saveHotkeyBtn');
+
+  storage.sync.get(['hotkeys'], (data) => {
+    const hotkeys = data.hotkeys || [];
+    const hk = hotkeys[index];
+    if (!hk) return;
+
+    editingHotkeyIndex = index;
+    if (hotkeyUrl) hotkeyUrl.value = hk.url;
+    if (hotkeyKey) hotkeyKey.value = hk.key;
+    if (hotkeyForm) hotkeyForm.style.display = 'flex';
+    if (saveHotkeyBtn) saveHotkeyBtn.textContent = 'Update';
+    if (hotkeyUrl) hotkeyUrl.focus();
   });
 }
 
