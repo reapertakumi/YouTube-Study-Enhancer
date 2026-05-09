@@ -14,7 +14,6 @@
 > [!NOTE]
 > Extension is still under Development, please report any Bugs
 - [Chrome Webstore](https://chromewebstore.google.com/detail/youtube-study-enhancer/pamglonmkhcpoilnohgaoghgfnjjmjne)
-- [FireFox Add-ons] Coming Soon.
 - [Edge Add-ons] Coming Soon.
 <p>
 </p>
