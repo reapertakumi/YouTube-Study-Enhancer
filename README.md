@@ -14,7 +14,7 @@
 > [!NOTE]
 > Extension is still under Development, please report any Bugs
 - [Chrome Webstore](https://chromewebstore.google.com/detail/youtube-study-enhancer/pamglonmkhcpoilnohgaoghgfnjjmjne)
-- [Edge Add-ons] Coming Soon.
+- [Edge Add-ons](https://microsoftedge.microsoft.com/addons/detail/youtube-study-enhancer/gpcplfhahjffeonijapnpkbfmdmkemoa)
 <p>
 </p>
 
