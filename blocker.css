@@ -24,7 +24,7 @@ body {
   cursor: pointer;
   z-index: 20;
   background: rgba(30, 30, 40, 0.6);
-  backdrop-filter: blur(8px);
+  backdrop-filter: blur(4px);
   width: 52px;
   height: 52px;
   border-radius: 50%;
@@ -59,7 +59,7 @@ body {
 .light {
   position: absolute;
   border-radius: 50%;
-  filter: blur(130px);
+  filter: blur(60px);
   will-change: transform;
   transition: width 0.3s ease, height 0.3s ease;
 }
@@ -110,6 +110,46 @@ body {
   50% {
     transform: translateY(-18px);
   }
+}
+
+/* ===== HARDWARE ACCELERATED ANIMATIONS ===== */
+/* These will be used when hardware acceleration is detected */
+
+@keyframes pulse3d {
+  50% { transform: translate3d(-50%, -50%, 0) scale3d(1.15, 1.15, 1); }
+}
+
+@keyframes drift3d {
+  0% { transform: translate3d(-52%, -48%, 0) scale3d(1, 1, 1); }
+  100% { transform: translate3d(-48%, -52%, 0) scale3d(1.2, 1.2, 1); }
+}
+
+@keyframes bounceSmooth3d {
+  0% { top: 5%; left: 5%; transform: translate3d(0, 0, 0); }
+  25% { top: 5%; left: 95%; transform: translate3d(-100%, 0, 0); }
+  50% { top: 95%; left: 95%; transform: translate3d(-100%, -100%, 0); }
+  75% { top: 95%; left: 5%; transform: translate3d(0, -100%, 0); }
+  100% { top: 5%; left: 5%; transform: translate3d(0, 0, 0); }
+}
+
+@keyframes orbitAroundMain3d {
+  0% { transform: translate3d(-50%, -50%, 0) rotate3d(0, 0, 1, 0deg) translate3d(260px, 0, 0) rotate3d(0, 0, 1, 0deg); }
+  100% { transform: translate3d(-50%, -50%, 0) rotate3d(0, 0, 1, 360deg) translate3d(260px, 0, 0) rotate3d(0, 0, 1, -360deg); }
+}
+
+@keyframes waveTravel3d {
+  0%, 100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(0, -18px, 0);
+  }
+}
+
+@keyframes float3d {
+  0% { transform: translate3d(0, 0, 0) rotate3d(0, 0, 1, 0deg); }
+  50% { transform: translate3d(0, -12px, 0) rotate3d(0, 0, 1, 5deg); }
+  100% { transform: translate3d(0, 0, 0) rotate3d(0, 0, 1, 0deg); }
 }
 
 @keyframes fadeIn {
@@ -167,6 +207,89 @@ body {
   100% { transform: translateY(0px) rotate(0deg); }
 }
 
+/* ===== HARDWARE ACCELERATION CLASSES ===== */
+
+/* Apply when hardware acceleration is available */
+.hardware-accelerated .light-main {
+  animation: pulse3d 6s ease-in-out infinite;
+  will-change: transform;
+  contain: layout style paint;
+}
+
+.hardware-accelerated .light-secondary {
+  animation: drift3d 14s ease-in-out infinite alternate;
+  will-change: transform;
+  contain: layout style paint;
+}
+
+.hardware-accelerated .icon {
+  animation: float3d 4s ease-in-out infinite;
+  will-change: transform;
+  contain: layout style paint;
+}
+
+.hardware-accelerated .wave-letter {
+  will-change: transform;
+  contain: layout style paint;
+}
+
+.hardware-accelerated .light {
+  will-change: transform;
+  contain: layout style paint;
+}
+
+/* Optimize specific animations when hardware acceleration is available */
+.hardware-accelerated .light-secondary[data-movement="bounce"] {
+  animation: bounceSmooth3d var(--bounce-duration, 14s) ease-in-out infinite;
+  will-change: transform, top, left;
+  contain: layout style paint;
+}
+
+.hardware-accelerated .light-secondary[data-movement="orbit"] {
+  animation: orbitAroundMain3d var(--orbit-duration, 14s) linear infinite;
+  will-change: transform;
+  contain: layout style paint;
+}
+
+.hardware-accelerated .wave-letter[data-animation="slow"] {
+  animation: waveTravel3d 8s ease-in-out infinite;
+  will-change: transform;
+  contain: layout style paint;
+}
+
+.hardware-accelerated .wave-letter[data-animation="medium"] {
+  animation: waveTravel3d 4s ease-in-out infinite;
+  will-change: transform;
+  contain: layout style paint;
+}
+
+.hardware-accelerated .wave-letter[data-animation="fast"] {
+  animation: waveTravel3d 2s ease-in-out infinite;
+  will-change: transform;
+  contain: layout style paint;
+}
+
+/* Fallback for no hardware acceleration */
+.no-hardware-acceleration .light-main {
+  animation: pulse 6s ease-in-out infinite;
+  /* Remove will-change to avoid unnecessary compositing */
+}
+
+.no-hardware-acceleration .light-secondary {
+  animation: drift 14s ease-in-out infinite alternate;
+  /* Remove will-change to avoid unnecessary compositing */
+}
+
+.no-hardware-acceleration .icon {
+  animation: float 4s ease-in-out infinite;
+  /* Remove will-change to avoid unnecessary compositing */
+}
+
+.no-hardware-acceleration .wave-letter {
+  /* Remove will-change to avoid unnecessary compositing */
+  animation: none;
+}
+
 /* ===== DARK GRAY BLUR OVERLAY ===== */
 .blur-overlay {
   position: fixed;
@@ -176,8 +299,8 @@ body {
   z-index: 3;
   pointer-events: none;
   background: rgb(0, 0, 0);
-  backdrop-filter: blur(8px);
-  opacity: 0.3;
+  backdrop-filter: blur(4px);
+  opacity: 0.45;
 }
 
 /* ===== REAL NOISE - on top of blur ===== */
@@ -266,7 +389,7 @@ body {
   position: fixed;
   inset: 0;
   background: rgba(8, 8, 16, 0.75);
-  backdrop-filter: blur(16px);
+  backdrop-filter: blur(8px);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -286,7 +409,7 @@ body {
   max-width: 420px;
   max-height: 85vh;
   background: rgba(20, 20, 28, 0.92);
-  backdrop-filter: blur(20px);
+  backdrop-filter: blur(12px);
   border-radius: 32px;
   padding: 24px 20px;
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -500,6 +623,7 @@ input[type="color"] {
 
 input[type="range"] {
   -webkit-appearance: none;
+  appearance: none;
   width: 100%;
   height: 4px;
   background: rgba(168,85,247,0.3);
@@ -634,7 +758,7 @@ input[type="range"]::-webkit-slider-thumb {
   align-items: center;
   gap: 20px;
   background: rgba(20, 20, 28, 0.7);
-  backdrop-filter: blur(16px);
+  backdrop-filter: blur(8px);
   border-radius: 60px;
   padding: 8px 24px;
   border: 1px solid rgba(255, 255, 255, 0.15);
@@ -702,6 +826,7 @@ input[type="range"]::-webkit-slider-thumb {
   width: 70px;
   height: 4px;
   -webkit-appearance: none;
+  appearance: none;
   background: rgba(168,85,247,0.3);
   border-radius: 5px;
   outline: none;
@@ -722,7 +847,7 @@ input[type="range"]::-webkit-slider-thumb {
   gap: 12px;
   width: 100%;
   background: rgba(0, 0, 0, 0.3);
-  backdrop-filter: blur(8px);
+  backdrop-filter: blur(4px);
   padding: 8px 16px;
   border-radius: 30px;
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -783,7 +908,7 @@ input[type="range"]::-webkit-slider-thumb {
 .sticky-note {
   width: 280px;
   background: rgba(30, 30, 40, 0.85);
-  backdrop-filter: blur(12px);
+  backdrop-filter: blur(8px);
   border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, 0.15);
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(168, 85, 247, 0.1);
@@ -1023,7 +1148,7 @@ input[type="range"]::-webkit-slider-thumb {
   height: 50px;
   border-radius: 50%;
   background: rgba(20, 20, 28, 0.7);
-  backdrop-filter: blur(12px);
+  backdrop-filter: blur(8px);
   border: 1px solid rgba(255, 255, 255, 0.2);
   color: white;
   font-size: 24px;
@@ -1067,7 +1192,7 @@ input[type="range"]::-webkit-slider-thumb {
 
 .tool-panel {
   background: rgba(20, 20, 28, 0.85);
-  backdrop-filter: blur(16px);
+  backdrop-filter: blur(8px);
   border-radius: 20px;
   border: 1px solid rgba(255, 255, 255, 0.15);
   padding: 12px;
@@ -1114,7 +1239,7 @@ input[type="range"]::-webkit-slider-thumb {
 
 .pomodoro-panel {
   background: rgba(20, 20, 28, 0.92);
-  backdrop-filter: blur(20px);
+  backdrop-filter: blur(8px);
   border-radius: 28px;
   border: 1px solid rgba(255, 255, 255, 0.15);
   padding: 20px;
@@ -1263,7 +1388,7 @@ input[type="range"]::-webkit-slider-thumb {
 
 .pomodoro-settings-panel {
   background: rgba(20, 20, 28, 0.95);
-  backdrop-filter: blur(24px);
+  backdrop-filter: blur(8px);
   border-radius: 28px;
   border: 1px solid rgba(255, 255, 255, 0.15);
   padding: 24px;
@@ -1362,7 +1487,7 @@ input[type="range"]::-webkit-slider-thumb {
 
 .ambient-panel {
   background: rgba(20, 20, 28, 0.92);
-  backdrop-filter: blur(20px);
+  backdrop-filter: blur(8px);
   border-radius: 28px;
   border: 1px solid rgba(255, 255, 255, 0.15);
   padding: 20px;
@@ -1439,6 +1564,7 @@ input[type="range"]::-webkit-slider-thumb {
   width: 100%;
   height: 3px;
   -webkit-appearance: none;
+  appearance: none;
   background: rgba(168, 85, 247, 0.3);
   border-radius: 3px;
   outline: none;
@@ -1501,6 +1627,7 @@ input[type="range"]::-webkit-slider-thumb {
   width: 100%;
   height: 4px;
   -webkit-appearance: none;
+  appearance: none;
   background: rgba(168, 85, 247, 0.3);
   border-radius: 4px;
   outline: none;
@@ -1527,7 +1654,7 @@ input[type="range"]::-webkit-slider-thumb {
 
 .library-panel {
   background: rgba(20, 20, 28, 0.96);
-  backdrop-filter: blur(24px);
+  backdrop-filter: blur(8px);
   border-radius: 28px;
   border: 1px solid rgba(168, 85, 247, 0.3);
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
@@ -1777,9 +1904,10 @@ input[type="range"]::-webkit-slider-thumb {
   height: 50px;
   border-radius: 50%;
   background: rgba(20, 20, 28, 0.7);
-  backdrop-filter: blur(12px);
+  backdrop-filter: blur(8px);
   border: 1px solid rgba(255, 255, 255, 0.2);
   color: white;
+  font-size: 24px;
   cursor: pointer;
   display: flex;
   align-items: center;

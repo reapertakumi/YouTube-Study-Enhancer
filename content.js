@@ -15,14 +15,13 @@ let isInitialized = false;
 let feedOriginalDisplay = null;
 let resizeTimeout = null;
 let shortsStyleElement = null;
-let feedStyleApplied = false;
 
-let lastApplyTime = 0;
-let applyThrottleTimer = null;
+let originalTheaterStateBeforeEnable = false;
+let isRemoveModeActive = false;
 
 const storage = (typeof chrome !== 'undefined' && chrome.storage) ? chrome.storage : browser.storage;
 
-// Load settings and initialize
+// Load settings and initialize once
 storage.sync.get(["shorts", "speed", "sidebar", "comments", "hideFeedMode"], data => {
   console.log("Settings loaded:", data);
   settings = { ...settings, ...data };
@@ -30,41 +29,29 @@ storage.sync.get(["shorts", "speed", "sidebar", "comments", "hideFeedMode"], dat
     init();
     isInitialized = true;
   } else {
-    applyAllFeatures();
+    applyAllFeaturesOnce();
   }
 });
 
-// Listen for setting changes - optimized with throttle
-let updateTimeout = null;
-let lastUpdateTime = 0;
-
+// Listen for setting changes
 storage.onChanged.addListener(changes => {
-  let needsUpdate = false;
+  let settingsChanged = false;
   Object.keys(changes).forEach(key => {
     if (key in settings || key === 'hideFeedMode') {
-      settings[key] = changes[key].newValue;
-      needsUpdate = true;
-      console.log(`Setting changed: ${key} = ${changes[key].newValue}`);
+      const oldValue = settings[key];
+      const newValue = changes[key].newValue;
+      settings[key] = newValue;
+      settingsChanged = true;
+      console.log(`Setting changed: ${key} = ${newValue} (was: ${oldValue})`);
     }
   });
   
-  if (needsUpdate) {
-    if (updateTimeout) clearTimeout(updateTimeout);
-    
-    const now = Date.now();
-    if (now - lastUpdateTime < 200) {
-      updateTimeout = setTimeout(() => {
-        lastUpdateTime = Date.now();
-        console.log("Settings updated, reapplying (delayed):", settings);
-        applyAllFeatures();
-      }, 150);
-    } else {
-      lastUpdateTime = now;
-      updateTimeout = setTimeout(() => {
-        console.log("Settings updated, reapplying:", settings);
-        applyAllFeatures();
-      }, 50);
-    }
+  if (settingsChanged) {
+    if (updateTimer) clearTimeout(updateTimer);
+    updateTimer = setTimeout(() => {
+      applyAllFeaturesOnce();
+      updateTimer = null;
+    }, 50); // Reduced from 100ms to 50ms
   }
 });
 
@@ -73,39 +60,42 @@ if (typeof chrome !== 'undefined' && chrome.runtime) {
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.type === 'SETTINGS_UPDATED' && message.settings) {
       console.log("Received settings update from popup:", message.settings);
+      let changed = false;
       Object.keys(message.settings).forEach(key => {
         if (key in settings || key === 'hideFeedMode') {
-          settings[key] = message.settings[key];
+          if (settings[key] !== message.settings[key]) {
+            const oldValue = settings[key];
+            settings[key] = message.settings[key];
+            changed = true;
+            console.log(`Setting updated from popup: ${key} = ${message.settings[key]} (was: ${oldValue})`);
+          }
         }
       });
-      applyAllFeatures();
+      if (changed) {
+        if (updateTimer) clearTimeout(updateTimer);
+        updateTimer = setTimeout(() => {
+          applyAllFeaturesOnce();
+          updateTimer = null;
+        }, 30); // Reduced from 50ms to 30ms
+      }
     }
     sendResponse({ success: true });
   });
 }
 
 function init() {
-  console.log("Initializing YouTube Study Enhancer - Feed Mode:", settings.hideFeedMode);
-  applyAllFeatures();
-  startObservers();
+  console.log("Initializing YouTube Study Enhancer");
+  applyAllFeaturesOnce();
 }
 
-function applyAllFeatures() {
-  // THROTTLE: Don't run more than once every 300ms
-  const now = Date.now();
-  if (now - lastApplyTime < 300) {
-    return;
-  }
-  lastApplyTime = now;
-  
-  console.log("Applying all features - settings:", settings);
+function applyAllFeaturesOnce() {
   hideShorts();
   handleVideoFeed();
   handleComments();
   handleSpeed();
 }
 
-// ============ HIDE SHORTS (CSS-based - instant, zero performance impact) ============
+// ============ HIDE SHORTS ============
 function hideShorts() {
   if (!settings.shorts) {
     if (shortsStyleElement) {
@@ -120,269 +110,267 @@ function hideShorts() {
   shortsStyleElement = document.createElement('style');
   shortsStyleElement.id = 'study-enhancer-hide-shorts';
   shortsStyleElement.textContent = `
-    /* Hide ALL Shorts links and containers instantly */
-    [href*="/shorts/"],
-    [href*="/shorts"],
-    a[href*="/shorts"],
-    a[href*="/shorts"] * {
-      display: none !important;
-    }
-    
-    /* Hide Shorts shelf containers */
-    grid-shelf-view-model.ytGridShelfViewModelHost,
-    ytd-reel-shelf-renderer,
-    ytd-rich-section-renderer,
-    ytd-rich-shelf-renderer {
-      display: none !important;
-    }
-    
-    /* Hide Shorts video containers */
-    ytd-rich-item-renderer:has([href*="/shorts/"]),
-    ytd-video-renderer:has([href*="/shorts/"]),
-    ytd-grid-video-renderer:has([href*="/shorts/"]),
-    ytd-compact-video-renderer:has([href*="/shorts/"]),
-    ytm-shorts-lockup-view-model-v2,
-    ytm-shorts-lockup-view-model {
-      display: none !important;
-    }
-    
-    /* Hide Shorts in side panels */
-    ytd-guide-entry-renderer:has([href="/shorts"]),
-    ytd-mini-guide-entry-renderer:has([href="/shorts"]) {
-      display: none !important;
-    }
-    
-    /* Hide the Shorts button in top navigation */
-    ytd-topbar-menu-button-renderer:has([aria-label="Shorts"]),
-    ytd-guide-entry-renderer:has([title="Shorts"]),
-    a[title="Shorts"],
-    [aria-label="Shorts"],
-    [aria-label="Shorts"] * {
-      display: none !important;
-    }
-    
-    /* Hide Shorts tab in video page */
-    ytd-pivot-bar-item-renderer:has([title="Shorts"]),
-    .ytp-pivot-shorts,
-    [role="tab"][aria-label="Shorts"] {
-      display: none !important;
-    }
+    [href*="/shorts/"], [href*="/shorts"], a[href*="/shorts"] { display: none !important; }
+    ytd-reel-shelf-renderer, ytd-rich-shelf-renderer, ytd-rich-section-renderer { display: none !important; }
+    ytd-rich-item-renderer:has([href*="/shorts/"]), ytd-video-renderer:has([href*="/shorts/"]) { display: none !important; }
+    ytd-guide-entry-renderer:has([href="/shorts"]), ytd-mini-guide-entry-renderer:has([href="/shorts"]) { display: none !important; }
+    ytd-topbar-menu-button-renderer:has([aria-label="Shorts"]) { display: none !important; }
   `;
   
   document.head.appendChild(shortsStyleElement);
 }
 
-// ============ VIDEO FEED HANDLING ============
-function findFeedElement() {
+// ============ THEATER MODE MANAGEMENT - OPTIMIZED ============
+
+let cachedTheaterButton = null;
+let lastButtonFindTime = 0;
+
+function findTheaterButtonFast() {
+  // Return cached button if found recently (within 5 seconds)
+  const now = Date.now();
+  if (cachedTheaterButton && document.body.contains(cachedTheaterButton) && now - lastButtonFindTime < 5000) {
+    return cachedTheaterButton;
+  }
+  
+  // Fast selectors in order of likelihood
   const selectors = [
-    '#secondary',
-    '#secondary.style-scope.ytd-watch-flexy',
-    'ytd-watch-flexy #secondary',
-    'ytd-watch-flexy #secondary.ytd-watch-flexy',
-    '#related',
-    'ytd-watch-next-secondary-results-renderer',
-    '#related.ytd-watch-flexy',
-    'div#secondary'
+    '.ytp-size-button',
+    'button[aria-label="Theater mode"]',
+    'button[title="Theater mode"]',
+    '.ytp-theater-button'
   ];
   
   for (const selector of selectors) {
-    const element = document.querySelector(selector);
-    if (element) {
-      return element;
+    const btn = document.querySelector(selector);
+    if (btn) {
+      cachedTheaterButton = btn;
+      lastButtonFindTime = now;
+      return btn;
     }
   }
   
+  cachedTheaterButton = null;
   return null;
 }
 
-function getComputedDisplay(element) {
-  if (!element) return null;
-  try {
-    const display = window.getComputedStyle(element).display;
-    return display && display !== 'none' ? display : null;
-  } catch(e) {
-    return null;
+function isTheaterModeActive() {
+  // Fastest check - just look for the attribute
+  const watchFlexy = document.querySelector('ytd-watch-flexy');
+  if (watchFlexy) {
+    return watchFlexy.hasAttribute('theater');
   }
+  return false;
+}
+
+function setTheaterModeInstant(enable) {
+  const isCurrentlyTheater = isTheaterModeActive();
+  
+  if (enable === isCurrentlyTheater) {
+    return true;
+  }
+  
+  // Method 1: Click the button (fastest)
+  const theaterButton = findTheaterButtonFast();
+  if (theaterButton) {
+    theaterButton.click();
+    return true;
+  }
+  
+  // Method 2: Direct attribute manipulation (instant)
+  const watchFlexy = document.querySelector('ytd-watch-flexy');
+  if (watchFlexy) {
+    if (enable) {
+      watchFlexy.setAttribute('theater', '');
+    } else {
+      watchFlexy.removeAttribute('theater');
+    }
+    
+    // Also update the player class
+    const player = document.querySelector('.html5-video-player');
+    if (player) {
+      if (enable) {
+        player.classList.add('ytp-theater-mode');
+      } else {
+        player.classList.remove('ytp-theater-mode');
+      }
+    }
+    
+    // Force layout update
+    watchFlexy.style.display = 'none';
+    watchFlexy.offsetHeight; // Force reflow
+    watchFlexy.style.display = '';
+    
+    return true;
+  }
+  
+  return false;
+}
+
+function saveOriginalTheaterState() {
+  originalTheaterStateBeforeEnable = isTheaterModeActive();
+}
+
+function restoreOriginalTheaterState() {
+  const currentState = isTheaterModeActive();
+  if (currentState !== originalTheaterStateBeforeEnable) {
+    setTheaterModeInstant(originalTheaterStateBeforeEnable);
+  }
+}
+
+// ============ VIDEO FEED HANDLING - OPTIMIZED ============
+
+let cachedFeedElement = null;
+let lastFeedFindTime = 0;
+
+function findFeedElementFast() {
+  const now = Date.now();
+  if (cachedFeedElement && document.body.contains(cachedFeedElement) && now - lastFeedFindTime < 2000) {
+    return cachedFeedElement;
+  }
+  
+  // Fast selectors
+  const feedSelectors = [
+    '#secondary',
+    'ytd-watch-flexy #secondary',
+    '#related',
+    'ytd-secondary-column'
+  ];
+  
+  for (const selector of feedSelectors) {
+    try {
+      const element = document.querySelector(selector);
+      if (element && !element.closest('#primary')) {
+        cachedFeedElement = element;
+        lastFeedFindTime = now;
+        return element;
+      }
+    } catch(e) {}
+  }
+  
+  cachedFeedElement = null;
+  return null;
 }
 
 function storeFeedDisplay(element) {
   if (!element) return;
   try {
-    const currentDisplay = getComputedDisplay(element);
-    feedOriginalDisplay = currentDisplay || 'block';
-    console.log("Stored original display:", feedOriginalDisplay);
+    const computedStyle = window.getComputedStyle(element);
+    feedOriginalDisplay = computedStyle.display !== 'none' ? computedStyle.display : 'block';
   } catch(e) {
     feedOriginalDisplay = 'block';
   }
 }
 
-function applyFullWidthToVideo() {
-  const primary = document.querySelector('#primary, #primary.style-scope.ytd-watch-flexy, ytd-watch-flexy #primary');
-  if (primary) {
-    primary.style.maxWidth = '100%';
-    primary.style.width = '100%';
-    primary.style.marginTop = '0';
-    primary.style.paddingRight = '0';
-  }
-  
-  const watchFlexy = document.querySelector('ytd-watch-flexy');
-  if (watchFlexy) {
-    watchFlexy.style.setProperty('--ytd-watch-flexy-secondary-width', '0px', 'important');
-    watchFlexy.style.setProperty('--ytd-watch-flexy-primary-width', '100%', 'important');
-  }
-  
-  let style = document.getElementById('study-enhancer-fullwidth');
-  if (!style) {
-    style = document.createElement('style');
-    style.id = 'study-enhancer-fullwidth';
-    document.head.appendChild(style);
-  }
-  style.textContent = `
-    ytd-watch-flexy #primary.ytd-watch-flexy {
-      max-width: 100% !important;
-      width: 100% !important;
-      flex: 1 !important;
-    }
-    ytd-watch-flexy[flexy] #primary.ytd-watch-flexy {
-      max-width: 100% !important;
-    }
-    .html5-video-player, .ytp-player-wrapper {
-      width: 100% !important;
-      max-width: 100% !important;
-    }
-    .ytp-chrome-bottom {
-      width: 100% !important;
-      left: 0 !important;
-    }
-  `;
-}
-
-function restoreOriginalVideoWidth() {
-  const primary = document.querySelector('#primary, #primary.style-scope.ytd-watch-flexy, ytd-watch-flexy #primary');
-  if (primary) {
-    primary.style.maxWidth = '';
-    primary.style.width = '';
-    primary.style.marginTop = '';
-    primary.style.paddingRight = '';
-  }
-  
-  const watchFlexy = document.querySelector('ytd-watch-flexy');
-  if (watchFlexy) {
-    watchFlexy.style.removeProperty('--ytd-watch-flexy-secondary-width');
-    watchFlexy.style.removeProperty('--ytd-watch-flexy-primary-width');
-  }
-  
-  const style = document.getElementById('study-enhancer-fullwidth');
-  if (style) style.remove();
-}
-
 function handleVideoFeed() {
-  if (!settings.sidebar) {
-    restoreVideoFeed();
-    return;
-  }
+  const feed = findFeedElementFast();
   
-  if (settings.hideFeedMode === "remove") {
-    applyRemoveMode();
+  if (settings.sidebar && settings.hideFeedMode === "remove") {
+    // ENABLE REMOVE MODE
+    if (!isRemoveModeActive) {
+      enableRemoveMode(feed);
+    } else if (feed && feed.style.display !== 'none') {
+      // Ensure feed is still hidden
+      feed.style.display = 'none';
+    }
+  } else if (settings.sidebar && settings.hideFeedMode === "hide") {
+    // HIDE MODE
+    enableHideMode(feed);
   } else {
-    applyHideMode();
+    // DISABLED
+    if (isRemoveModeActive || feedOriginalDisplay !== null) {
+      disableAllModes(feed);
+    }
   }
 }
 
-function applyRemoveMode() {
-  const feed = findFeedElement();
-  if (!feed) return;
+function enableRemoveMode(feed) {
+  // Save original theater state BEFORE any changes
+  saveOriginalTheaterState();
   
-  // Check if already applied
-  if (feed.style.display === 'none' && feedOriginalDisplay !== null) {
-    return;
+  // Hide feed IMMEDIATELY
+  if (feed) {
+    if (feedOriginalDisplay === null) {
+      storeFeedDisplay(feed);
+    }
+    feed.style.display = 'none';
+    
+    // Also hide any secondary columns quickly
+    const secondaryColumns = document.querySelectorAll('[id*="secondary"], ytd-secondary-column');
+    for (const col of secondaryColumns) {
+      if (col !== feed && !col.closest('#primary')) {
+        col.style.display = 'none';
+      }
+    }
   }
   
-  console.log("Remove mode: Setting feed display to none");
+  // Enable theater mode IMMEDIATELY (no setTimeout)
+  setTheaterModeInstant(true);
   
-  feed.style.visibility = '';
-  feed.style.opacity = '';
-  feed.style.pointerEvents = '';
+  isRemoveModeActive = true;
+  console.log("Remove mode enabled instantly");
+}
+
+function enableHideMode(feed) {
+  if (!feed) return;
   
+  // If coming from remove mode, restore theater state
+  if (isRemoveModeActive) {
+    restoreOriginalTheaterState();
+    isRemoveModeActive = false;
+  }
+  
+  // Store original display if needed
   if (feedOriginalDisplay === null) {
     storeFeedDisplay(feed);
   }
   
-  feed.style.display = 'none';
-  applyFullWidthToVideo();
-  
-  if (resizeTimeout) clearTimeout(resizeTimeout);
-  resizeTimeout = setTimeout(() => {
-    window.dispatchEvent(new Event('resize'));
-  }, 50);
-}
-
-function applyHideMode() {
-  const feed = findFeedElement();
-  if (!feed) return;
-  
-  // Check if already applied
-  if (feed.style.visibility === 'hidden' && feedOriginalDisplay !== null) {
-    return;
-  }
-  
-  console.log("Hide mode: Setting feed visibility to hidden");
-  
-  if (feedOriginalDisplay === null) {
-    storeFeedDisplay(feed);
-  }
-  
-  // Restore display first if it was hidden by remove mode
+  // Restore display if it was set to none
   if (feed.style.display === 'none') {
-    feed.style.display = feedOriginalDisplay || '';
+    feed.style.display = feedOriginalDisplay;
   }
   
+  // Apply visual hiding
   feed.style.visibility = 'hidden';
   feed.style.opacity = '0';
   feed.style.pointerEvents = 'none';
-  
-  restoreOriginalVideoWidth();
 }
 
-function restoreVideoFeed() {
-  const feed = findFeedElement();
-  if (!feed) return;
-  
-  // Check if already restored
-  if (feed.style.display !== 'none' && feed.style.visibility !== 'hidden') {
-    return;
+function disableAllModes(feed) {
+  // Restore feed visibility immediately
+  if (feed) {
+    feed.style.display = feedOriginalDisplay || '';
+    feed.style.visibility = '';
+    feed.style.opacity = '';
+    feed.style.pointerEvents = '';
   }
   
-  console.log("Restoring video feed");
+  // Restore secondary columns
+  const secondaryColumns = document.querySelectorAll('[id*="secondary"], ytd-secondary-column');
+  for (const col of secondaryColumns) {
+    if (col !== feed && !col.closest('#primary')) {
+      col.style.display = '';
+    }
+  }
   
-  feed.style.display = feedOriginalDisplay || '';
-  feed.style.visibility = '';
-  feed.style.opacity = '';
-  feed.style.pointerEvents = '';
+  // Restore original theater mode instantly
+  if (isRemoveModeActive) {
+    restoreOriginalTheaterState();
+  }
   
-  restoreOriginalVideoWidth();
+  // Reset state
+  isRemoveModeActive = false;
   feedOriginalDisplay = null;
-  
-  if (resizeTimeout) clearTimeout(resizeTimeout);
-  resizeTimeout = setTimeout(() => {
-    window.dispatchEvent(new Event('resize'));
-  }, 50);
 }
 
 // ============ COMMENTS HANDLING ============
 function handleComments() {
-  const comments = document.querySelector("#comments, #comments.style-scope.ytd-watch-flexy");
+  const comments = document.querySelector("#comments, #comments.ytd-watch-flexy, ytd-comments");
   if (!comments) return;
   comments.style.display = settings.comments ? "none" : "";
 }
 
-// ============ FIXED SPEED BLOCK WITH RESTORE ============
+// ============ SPEED BLOCK ============
 function handleSpeed() {
-  if (speedInterval) {
-    clearInterval(speedInterval);
-    speedInterval = null;
-  }
-  
   speedObservers.forEach(obs => obs.disconnect());
   speedObservers = [];
   
@@ -394,8 +382,7 @@ function handleSpeed() {
       rateChangeHandlers.delete(video);
     }
     if (originalPlaybackRates.has(video)) {
-      const originalRate = originalPlaybackRates.get(video);
-      video.playbackRate = originalRate;
+      video.playbackRate = originalPlaybackRates.get(video);
       originalPlaybackRates.delete(video);
     }
   });
@@ -421,107 +408,67 @@ function handleSpeed() {
     }
   });
   
-  speedInterval = setInterval(() => {
-    const currentVideos = document.querySelectorAll("video");
-    currentVideos.forEach(video => enforceSpeed(video));
-  }, 200);
-  
-  const observer = new MutationObserver(() => {
-    const newVideos = document.querySelectorAll("video");
-    newVideos.forEach(video => {
-      if (!originalPlaybackRates.has(video)) {
-        enforceSpeed(video);
-        if (!rateChangeHandlers.has(video)) {
-          const handler = () => enforceSpeed(video);
-          video.addEventListener('ratechange', handler);
-          rateChangeHandlers.set(video, handler);
+  const observer = new MutationObserver((mutations) => {
+    mutations.forEach((mutation) => {
+      mutation.addedNodes.forEach((node) => {
+        if (node.nodeName === 'VIDEO') {
+          enforceSpeed(node);
+        } else if (node.querySelectorAll) {
+          node.querySelectorAll('video').forEach(enforceSpeed);
         }
-      }
+      });
     });
   });
+  
   observer.observe(document.body, { childList: true, subtree: true });
   speedObservers.push(observer);
 }
 
-// ============ WATCH FOR NAVIGATION (optimized - minimal impact) ============
+// ============ NAVIGATION OBSERVERS ============
+let updateTimer = null;
+
 function startObservers() {
-  // Prevent duplicate observer initialization
-  if (window.__studyEnhancerObserversStarted) {
-    console.log("Observers already started, skipping duplicate initialization");
-    return;
-  }
+  if (window.__studyEnhancerObserversStarted) return;
   window.__studyEnhancerObserversStarted = true;
   
-  let urlChangeTimer = null;
-  let isApplyingThrottle = false;
+  let lastUrl = location.href;
   
-  // Throttled apply function - prevents rapid successive calls
-  const throttledApply = () => {
-    if (isApplyingThrottle) return;
-    isApplyingThrottle = true;
-    
-    setTimeout(() => {
-      applyAllFeatures();
-      isApplyingThrottle = false;
-    }, 100);
-  };
-  
-  // Use setInterval for URL checking (much more efficient)
-  let lastKnownUrl = location.href;
-  
+  // Faster URL checking (reduced from 500ms to 200ms)
   setInterval(() => {
     const currentUrl = location.href;
-    if (currentUrl !== lastKnownUrl && currentUrl.includes('youtube.com')) {
-      console.log("URL changed from", lastKnownUrl, "to", currentUrl);
-      lastKnownUrl = currentUrl;
+    if (currentUrl !== lastUrl && currentUrl.includes('youtube.com')) {
+      lastUrl = currentUrl;
+      
+      // Clear cache on navigation
+      cachedFeedElement = null;
+      cachedTheaterButton = null;
+      isRemoveModeActive = false;
       feedOriginalDisplay = null;
-      throttledApply();
+      
+      // Apply faster on navigation
+      setTimeout(() => applyAllFeaturesOnce(), 100);
     }
-  }, 500);
+  }, 200);
   
-  // YouTube's custom navigation event
+  // YouTube navigation event - apply immediately
   document.addEventListener('yt-navigate-finish', () => {
-    console.log("yt-navigate-finish event fired");
-    if (urlChangeTimer) clearTimeout(urlChangeTimer);
-    urlChangeTimer = setTimeout(() => {
-      feedOriginalDisplay = null;
-      throttledApply();
-    }, 200);
-  });
-  
-  // Use requestIdleCallback for idle checks (much more efficient)
-  let lastCheckTime = 0;
-  
-  const idleCheck = () => {
-    const now = Date.now();
-    if (now - lastCheckTime > 2000) {
-      lastCheckTime = now;
-      if (window.location.href.includes('youtube.com')) {
-        if (document.querySelector("#secondary") || document.querySelector("#comments") || document.querySelector("video")) {
-          throttledApply();
-        }
-      }
-    }
+    cachedFeedElement = null;
+    cachedTheaterButton = null;
+    isRemoveModeActive = false;
+    feedOriginalDisplay = null;
     
-    if ('requestIdleCallback' in window) {
-      requestIdleCallback(idleCheck, { timeout: 3000 });
-    } else {
-      setTimeout(idleCheck, 2000);
-    }
-  };
-  
-  if ('requestIdleCallback' in window) {
-    requestIdleCallback(idleCheck, { timeout: 3000 });
-  } else {
-    setTimeout(idleCheck, 2000);
-  }
-  
-  console.log("Observers started successfully (optimized mode)");
+    // Apply immediately, no delay
+    applyAllFeaturesOnce();
+  });
 }
 
 // ============ INITIALIZE ============
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', init);
+  document.addEventListener('DOMContentLoaded', () => {
+    init();
+    startObservers();
+  });
 } else {
   init();
+  startObservers();
 }

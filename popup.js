@@ -75,6 +75,9 @@ document.addEventListener("DOMContentLoaded", () => {
     if (data.particlesEnabled === true && savedPreset === 'sakura') {
       startSakuraParticles();
     }
+    if (data.particlesEnabled === true && savedPreset === 'winter') {
+      startWinterParticles();
+    }
     
     const youtubeContent = document.getElementById('youtubeContent');
     const blockContent = document.getElementById('blockContent');
@@ -164,15 +167,13 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // Add this after the themeToggle event listener code, before setupCollapseHandlers call
-
-const homeBtn = document.getElementById('homeBtn');
-if (homeBtn) {
-  homeBtn.addEventListener('click', () => {
-    const blockerUrl = chrome.runtime.getURL('blocker.html');
-    chrome.tabs.create({ url: blockerUrl });
-  });
-}
+  const homeBtn = document.getElementById('homeBtn');
+  if (homeBtn) {
+    homeBtn.addEventListener('click', () => {
+      const blockerUrl = chrome.runtime.getURL('blocker.html');
+      chrome.tabs.create({ url: blockerUrl });
+    });
+  }
 
   const addDomainBtn = document.getElementById('addDomainBtn');
   if (addDomainBtn) {
@@ -229,8 +230,9 @@ function applyFontToPopup(fontFamily) {
 
 function applyThemePreset(preset) {
   const presetClasses = [
-    'theme-default', 'theme-sunset', 'theme-ocean', 'theme-forest',
-    'theme-midnight', 'theme-coffee', 'theme-aurora', 'theme-sakura', 'theme-old'
+    'theme-default', 'theme-sunset', 'theme-ocean',
+    'theme-midnight', 'theme-sakura', 'theme-neon',
+    'theme-retro', 'theme-winter', 'theme-lofi'
   ];
   presetClasses.forEach(className => {
     document.body.classList.remove(className);
@@ -243,10 +245,22 @@ function applyThemePreset(preset) {
   storage.sync.set({ themePreset: preset });
   
   storage.sync.get(['particlesEnabled'], (data) => {
-    if (data.particlesEnabled === true && preset === 'sakura') {
-      startSakuraParticles();
+    const isParticlesEnabled = data.particlesEnabled === true;
+    
+    if (isParticlesEnabled) {
+      if (preset === 'sakura') {
+        stopWinterParticles();
+        startSakuraParticles();
+      } else if (preset === 'winter') {
+        stopSakuraParticles();
+        startWinterParticles();
+      } else {
+        stopSakuraParticles();
+        stopWinterParticles();
+      }
     } else {
       stopSakuraParticles();
+      stopWinterParticles();
     }
   });
 }
@@ -1351,11 +1365,17 @@ function setupSettingsModal() {
   if (particleToggle) {
     particleToggle.addEventListener('change', () => {
       storage.sync.set({ particlesEnabled: particleToggle.checked });
-      const currentPreset = document.body.classList.contains('theme-sakura') ? 'sakura' : '';
-      if (particleToggle.checked && currentPreset === 'sakura') {
-        startSakuraParticles();
+      const currentPreset = document.body.classList.contains('theme-sakura') ? 'sakura' : 
+                           document.body.classList.contains('theme-winter') ? 'winter' : '';
+      if (particleToggle.checked) {
+        if (currentPreset === 'sakura') {
+          startSakuraParticles();
+        } else if (currentPreset === 'winter') {
+          startWinterParticles();
+        }
       } else {
         stopSakuraParticles();
+        stopWinterParticles();
       }
     });
   }
@@ -1501,12 +1521,10 @@ function startSakuraParticles() {
   
   const isLight = document.body.classList.contains('light-theme');
   
-  // Spawn a petal every 300-800ms
   sakuraInterval = setInterval(() => {
     createSakuraPetal(container, isLight);
   }, 300 + Math.random() * 500);
   
-  // Spawn initial batch
   for (let i = 0; i < 5; i++) {
     setTimeout(() => createSakuraPetal(container, isLight), i * 200);
   }
@@ -1549,12 +1567,103 @@ function createSakuraPetal(container, isLight) {
   container.appendChild(petal);
   sakuraPetals.push(petal);
   
-  // Remove after animation completes
   setTimeout(() => {
     if (petal.parentNode) {
       petal.remove();
     }
     sakuraPetals = sakuraPetals.filter(p => p !== petal);
+  }, (duration + delay) * 1000);
+}
+
+/* ============================================ */
+/* WINTER SNOWFLAKE PARTICLES                   */
+/* ============================================ */
+
+let winterInterval = null;
+let winterSnowflakes = [];
+
+function startWinterParticles() {
+  if (winterInterval) return;
+  
+  const container = document.getElementById('winterParticles');
+  if (!container) return;
+  
+  const isLight = document.body.classList.contains('light-theme');
+  
+  winterInterval = setInterval(() => {
+    createSnowflake(container, isLight);
+  }, 200 + Math.random() * 400);
+  
+  for (let i = 0; i < 8; i++) {
+    setTimeout(() => createSnowflake(container, isLight), i * 150);
+  }
+}
+
+function stopWinterParticles() {
+  if (winterInterval) {
+    clearInterval(winterInterval);
+    winterInterval = null;
+  }
+  const container = document.getElementById('winterParticles');
+  if (container) {
+    container.innerHTML = '';
+  }
+  winterSnowflakes = [];
+}
+
+function createSnowflake(container, isLight) {
+  const snowflake = document.createElement('div');
+  const size = 8 + Math.random() * 12;
+  const startLeft = Math.random() * 100;
+  const duration = 5 + Math.random() * 6;
+  const delay = Math.random() * 2;
+  const swayType = Math.random() > 0.5 ? 'snowSway' : 'snowSwayWide';
+  
+  // Only flakes now (no dots)
+  const isThin = Math.random() > 0.6;  // 40% chance for thinner snowflakes
+  const isLarge = Math.random() > 0.85; // 15% chance for larger snowflakes
+  
+  snowflake.classList.add('snowflake', 'flake');
+  
+  // Add the diagonal arms
+  const diag1 = document.createElement('div');
+  diag1.className = 'diagonal1';
+  const diag2 = document.createElement('div');
+  diag2.className = 'diagonal2';
+  const center = document.createElement('div');
+  center.className = 'center';
+  
+  snowflake.appendChild(diag1);
+  snowflake.appendChild(diag2);
+  snowflake.appendChild(center);
+  
+  if (isThin) {
+    snowflake.classList.add('thin');
+  }
+  if (isLarge) {
+    snowflake.classList.add('large');
+  }
+  
+  snowflake.style.left = `${startLeft}%`;
+  snowflake.style.width = `${size}px`;
+  snowflake.style.height = `${size}px`;
+  snowflake.style.animation = `snowFall ${duration}s linear ${delay}s forwards, ${swayType} ${duration * 0.8}s ease-in-out ${delay}s infinite`;
+  
+  // Set opacity based on theme
+  if (isLight) {
+    snowflake.style.opacity = 0.5 + Math.random() * 0.3;
+  } else {
+    snowflake.style.opacity = 0.6 + Math.random() * 0.4;
+  }
+  
+  container.appendChild(snowflake);
+  winterSnowflakes.push(snowflake);
+  
+  setTimeout(() => {
+    if (snowflake.parentNode) {
+      snowflake.remove();
+    }
+    winterSnowflakes = winterSnowflakes.filter(s => s !== snowflake);
   }, (duration + delay) * 1000);
 }
 
@@ -1575,7 +1684,6 @@ function saveHotkeyMapping() {
 
   if (!url || !key) return;
 
-  // Reject bare modifier keys
   if (['Ctrl', 'Alt', 'Shift', 'Meta'].includes(key)) return;
 
   if (!url.startsWith('http://') && !url.startsWith('https://')) {
@@ -1613,7 +1721,6 @@ function loadHotkeysList() {
     const hotkeys = data.hotkeys || [];
     list.innerHTML = '';
 
-    // Default non-deletable entry: Open Extension
     if (chrome.commands && chrome.commands.getAll) {
       chrome.commands.getAll((commands) => {
         const openCmd = commands.find(c => c.name === '_execute_action');
@@ -1739,18 +1846,14 @@ function normalizeKeyCombo(e) {
     key = key.toUpperCase();
   }
 
-  // Bare modifier press (only that modifier is held): show short name for feedback
   if (modMap[key] && heldMods.length === 1) {
     return modMap[key];
   }
 
-  // Modifier held + another modifier pressed: show all held modifiers
-  // e.g. Ctrl held, Shift pressed -> "Ctrl+Shift"
   if (modMap[key]) {
     return heldMods.join('+');
   }
 
-  // Non-modifier key
   if (heldMods.length === 0) {
     return key;
   }

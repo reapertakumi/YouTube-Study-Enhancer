@@ -4,10 +4,12 @@ console.log("Background script loaded, version:", CURRENT_VERSION);
 
 const injectedTabs = new Set();
 
-// Context menu ID
+// Context menu IDs
 const CONTEXT_MENU_PARENT = "download_image";
 const CONTEXT_MENU_PNG = "download_image_png";
 const CONTEXT_MENU_JPG = "download_image_jpg";
+const CONTEXT_MENU_SCREENSHOT_VISIBLE = "screenshot_page_visible";
+const CONTEXT_MENU_SCREENSHOT_FULL = "screenshot_page_full";
 
 // Create context menus on install
 chrome.runtime.onInstalled.addListener((details) => {
@@ -42,7 +44,7 @@ createContextMenus();
 function createContextMenus() {
   // Remove existing menus to avoid duplicates
   chrome.contextMenus.removeAll(() => {
-    // Create parent menu
+    // Create parent menu for image downloads
     chrome.contextMenus.create({
       id: CONTEXT_MENU_PARENT,
       title: "Save Image As",
@@ -65,6 +67,27 @@ function createContextMenus() {
       contexts: ["image"]
     });
     
+    // Create separator (optional, for visual grouping)
+    chrome.contextMenus.create({
+      id: "separator",
+      type: "separator",
+      contexts: ["page"]
+    });
+    
+    // Create visible screenshot menu item
+    chrome.contextMenus.create({
+      id: CONTEXT_MENU_SCREENSHOT_VISIBLE,
+      title: "Screenshot (Visible Area)",
+      contexts: ["page"]
+    });
+    
+    // Create full page screenshot menu item
+    chrome.contextMenus.create({
+      id: CONTEXT_MENU_SCREENSHOT_FULL,
+      title: "Screenshot (Full Page)",
+      contexts: ["page"]
+    });
+    
     console.log("Context menus created");
   });
 }
@@ -75,8 +98,160 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
     downloadImageAs(info.srcUrl, "png");
   } else if (info.menuItemId === CONTEXT_MENU_JPG) {
     downloadImageAs(info.srcUrl, "jpg");
+  } else if (info.menuItemId === CONTEXT_MENU_SCREENSHOT_VISIBLE) {
+    takeVisibleScreenshot(tab.id);
+  } else if (info.menuItemId === CONTEXT_MENU_SCREENSHOT_FULL) {
+    takeFullPageScreenshot(tab.id);
   }
 });
+
+// Take screenshot of visible area only
+async function takeVisibleScreenshot(tabId) {
+  console.log("Taking visible screenshot of tab:", tabId);
+  
+  try {
+    const tab = await chrome.tabs.get(tabId);
+    
+    if (!tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('edge://')) {
+      console.error("Cannot screenshot browser internal pages");
+      return;
+    }
+    
+    // Capture visible tab as base64 PNG
+    const screenshotDataUrl = await chrome.tabs.captureVisibleTab(
+      tab.windowId,
+      { format: "png" }
+    );
+    
+    const filename = generateScreenshotFilename("visible");
+    
+    // Download the screenshot
+    chrome.downloads.download({
+      url: screenshotDataUrl,
+      filename: filename,
+      saveAs: false
+    }, (downloadId) => {
+      if (chrome.runtime.lastError) {
+        console.error('Screenshot download failed:', chrome.runtime.lastError.message);
+      } else {
+        console.log('Screenshot download started with ID:', downloadId);
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error taking visible screenshot:', error);
+  }
+}
+
+// Take full page screenshot using debugger API
+async function takeFullPageScreenshot(tabId) {
+  console.log("Taking full page screenshot of tab:", tabId);
+  
+  try {
+    const tab = await chrome.tabs.get(tabId);
+    
+    if (!tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('edge://')) {
+      console.error("Cannot screenshot browser internal pages");
+      return;
+    }
+    
+    // Attach debugger to the tab
+    await chrome.debugger.attach({ tabId: tabId }, "1.3");
+    console.log("Debugger attached to tab:", tabId);
+    
+    // Get document height and width
+    const metrics = await chrome.debugger.sendCommand({ tabId: tabId }, "Page.getLayoutMetrics");
+    
+    // Get the content size
+    const contentSize = metrics.cssContentSize || metrics.contentSize;
+    const scrollWidth = Math.ceil(contentSize.width);
+    const scrollHeight = Math.ceil(contentSize.height);
+    
+    console.log(`Page size: ${scrollWidth} x ${scrollHeight}`);
+    
+    // Set device metrics to capture full page
+    await chrome.debugger.sendCommand({ tabId: tabId }, "Emulation.setDeviceMetricsOverride", {
+      width: scrollWidth,
+      height: scrollHeight,
+      deviceScaleFactor: 1,
+      mobile: false,
+      fitWindow: false
+    });
+    
+    // Set viewport to cover entire page
+    await chrome.debugger.sendCommand({ tabId: tabId }, "Emulation.setVisibleSize", {
+      width: scrollWidth,
+      height: scrollHeight
+    });
+    
+    // Capture screenshot
+    const screenshot = await chrome.debugger.sendCommand({ tabId: tabId }, "Page.captureScreenshot", {
+      format: "png",
+      captureBeyondViewport: true,
+      clip: {
+        x: 0,
+        y: 0,
+        width: scrollWidth,
+        height: scrollHeight,
+        scale: 1
+      }
+    });
+    
+    // Restore device metrics (clear overrides)
+    await chrome.debugger.sendCommand({ tabId: tabId }, "Emulation.clearDeviceMetricsOverride");
+    
+    // Detach debugger
+    await chrome.debugger.detach({ tabId: tabId });
+    console.log("Debugger detached from tab:", tabId);
+    
+    // Convert base64 to data URL
+    const screenshotDataUrl = `data:image/png;base64,${screenshot.data}`;
+    
+    // Generate filename
+    const filename = generateScreenshotFilename("fullpage");
+    
+    // Download the screenshot
+    chrome.downloads.download({
+      url: screenshotDataUrl,
+      filename: filename,
+      saveAs: false
+    }, (downloadId) => {
+      if (chrome.runtime.lastError) {
+        console.error('Full page screenshot download failed:', chrome.runtime.lastError.message);
+      } else {
+        console.log('Full page screenshot download started with ID:', downloadId);
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error taking full page screenshot:', error);
+    
+    // Clean up: detach debugger if still attached
+    try {
+      await chrome.debugger.detach({ tabId: tabId });
+    } catch (detachError) {
+      console.error('Error detaching debugger:', detachError);
+    }
+  }
+}
+
+// Handle debugger detach events
+chrome.debugger.onDetach.addListener((source, reason) => {
+  console.log(`Debugger detached from tab ${source.tabId}: ${reason}`);
+});
+
+function generateScreenshotFilename(type) {
+  const timestamp = new Date();
+  const year = timestamp.getFullYear();
+  const month = String(timestamp.getMonth() + 1).padStart(2, '0');
+  const day = String(timestamp.getDate()).padStart(2, '0');
+  const hours = String(timestamp.getHours()).padStart(2, '0');
+  const minutes = String(timestamp.getMinutes()).padStart(2, '0');
+  const seconds = String(timestamp.getSeconds()).padStart(2, '0');
+  const milliseconds = String(timestamp.getMilliseconds()).padStart(3, '0');
+  
+  return `screenshot_${type}_${year}-${month}-${day}_${hours}-${minutes}-${seconds}-${milliseconds}.png`;
+}
 
 async function downloadImageAs(imageUrl, format) {
   console.log(`Downloading image as ${format}:`, imageUrl);

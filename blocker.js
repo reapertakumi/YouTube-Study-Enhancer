@@ -1,4 +1,8 @@
 (function() {
+  // Prevent duplicate execution
+  if (window.__hotkeyListenerInstalled) return;
+  window.__hotkeyListenerInstalled = true;
+
   const storage = (typeof chrome !== 'undefined' && chrome.storage) ? chrome.storage : browser.storage;
   const REMOVED_SITES_KEY = "removedDefaultSites";
 
@@ -30,7 +34,7 @@
         }
       }
 
-      // Check custom domains - FIXED: customDomains is { "domain.com": true/false }
+      // Check custom domains
       if (!shouldBlock && data.customDomains) {
         for (const [domain, enabled] of Object.entries(data.customDomains)) {
           if (enabled && currentUrl.includes(domain.toLowerCase())) {
@@ -46,48 +50,112 @@
     });
   }
 
+  // Redirect YouTube Shorts to homepage when shorts blocking is enabled
+  function redirectShortsToHomepage() {
+    // Only run on youtube.com
+    if (!window.location.hostname.includes('youtube.com')) return;
+    
+    // Check if current URL is a Shorts URL
+    if (window.location.pathname.includes('/shorts/')) {
+      storage.sync.get(['shorts'], (data) => {
+        if (data.shorts === true) {
+          // Redirect to YouTube homepage
+          window.location.replace('https://www.youtube.com/');
+        }
+      });
+    }
+  }
+
+  // Run initial checks
   checkAndRedirect();
+  redirectShortsToHomepage();
   
-  // Handle SPA navigation (Instagram, etc.)
+  // Handle SPA navigation (Instagram, YouTube, etc.)
   let lastUrl = location.href;
   const observer = new MutationObserver(() => {
     const url = location.href;
     if (url !== lastUrl) {
       lastUrl = url;
-      setTimeout(checkAndRedirect, 100);
+      setTimeout(() => {
+        checkAndRedirect();
+        redirectShortsToHomepage();
+      }, 100);
     }
   });
   observer.observe(document, { subtree: true, childList: true });
   
   window.addEventListener('popstate', () => {
-    setTimeout(checkAndRedirect, 100);
+    setTimeout(() => {
+      checkAndRedirect();
+      redirectShortsToHomepage();
+    }, 100);
   });
 
-  // Global hotkey listener — works even when popup is closed
-  // Use window + capture phase so page JS can't stopPropagation the event
+  // ========== OPTIMIZED GLOBAL HOTKEY LISTENER ==========
+  let cachedHotkeys = [];
+  let hotkeysLoaded = false;
+  let isProcessingHotkey = false;
+
+  // Load hotkeys once and cache them
+  function loadHotkeys() {
+    if (hotkeysLoaded) return;
+    
+    storage.sync.get(['hotkeys'], (data) => {
+      cachedHotkeys = data.hotkeys || [];
+      hotkeysLoaded = true;
+    });
+  }
+
+  // Check if a combo matches any stored hotkey
+  function isRegisteredHotkey(combo) {
+    return cachedHotkeys.some(hk => hk.key === combo);
+  }
+
+  // Load hotkeys on page load
+  loadHotkeys();
+
+  // Reload hotkeys when storage changes (user updates preferences)
+  if (storage.onChanged) {
+    storage.onChanged.addListener((changes, area) => {
+      if (area === 'sync' && changes.hotkeys) {
+        cachedHotkeys = changes.hotkeys.newValue || [];
+      }
+    });
+  }
+
   window.addEventListener('keydown', (e) => {
+    // Ignore typing in input fields
     if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable)) return;
+    
+    // Prevent duplicate processing of the same keydown event
+    if (isProcessingHotkey) return;
+    
+    // Only process if hotkeys are loaded
+    if (!hotkeysLoaded) return;
 
     const combo = normalizeKeyCombo(e);
     if (!combo) return;
 
-    console.log('[YouTube Study Enhancer] Hotkey combo pressed:', combo);
+    // ONLY proceed if this is a registered hotkey
+    if (!isRegisteredHotkey(combo)) return;
 
-    storage.sync.get(['hotkeys'], (data) => {
-      const hotkeys = data.hotkeys || [];
-      console.log('[YouTube Study Enhancer] Stored hotkeys:', hotkeys);
-      const match = hotkeys.find(hk => hk.key === combo);
-      if (match && match.url) {
-        console.log('[YouTube Study Enhancer] Match found, sending to background:', match.url);
-        try {
-          chrome.runtime.sendMessage({ action: 'openHotkeyUrl', url: match.url });
-        } catch (err) {
-          console.error('[YouTube Study Enhancer] sendMessage failed:', err);
-        }
-      } else {
-        console.log('[YouTube Study Enhancer] No match for combo:', combo);
+    // Mark as processing to prevent duplicates
+    isProcessingHotkey = true;
+
+    // Find and execute the matching hotkey
+    const match = cachedHotkeys.find(hk => hk.key === combo);
+    if (match && match.url) {
+      try {
+        chrome.runtime.sendMessage({ action: 'openHotkeyUrl', url: match.url });
+      } catch (err) {
+        console.error('[YouTube Study Enhancer] sendMessage failed:', err);
       }
-    });
+    }
+    
+    // Reset processing flag after a short delay
+    setTimeout(() => {
+      isProcessingHotkey = false;
+    }, 100);
   }, { capture: true });
 
   function normalizeKeyCombo(e) {

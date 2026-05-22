@@ -12,6 +12,27 @@
   let pendingCallback = null;
   let remoteManifest = null;
   
+  // ===== DATABASE STATE CACHING =====
+  const dbCache = {
+    connection: null,
+    isAudioDownloaded: null,
+    storedManifest: null,
+    lastChecked: 0,
+    cacheTimeout: 5000, // 5 seconds cache timeout
+    
+    // Clear cache when needed
+    clear() {
+      this.isAudioDownloaded = null;
+      this.storedManifest = null;
+      this.lastChecked = 0;
+    },
+    
+    // Check if cache is valid
+    isValid() {
+      return Date.now() - this.lastChecked < this.cacheTimeout;
+    }
+  };
+  
   // Current audio files (will be populated from manifest)
   let currentAudioFiles = {
     music: [],
@@ -21,11 +42,12 @@
   // Custom user-added music
   let customPlaylist = [];
   
-  // Open IndexedDB
+  // Open IndexedDB with caching
   function openDatabase() {
     return new Promise((resolve, reject) => {
-      if (db && db.name === DB_NAME) {
-        resolve(db);
+      // Use cached connection if available
+      if (dbCache.connection && dbCache.connection.name === DB_NAME) {
+        resolve(dbCache.connection);
         return;
       }
       
@@ -34,6 +56,7 @@
       request.onerror = () => reject(request.error);
       request.onsuccess = () => {
         db = request.result;
+        dbCache.connection = db; // Cache the connection
         resolve(db);
       };
       
@@ -58,7 +81,11 @@
         timestamp: Date.now(),
         ...metadata
       });
-      request.onsuccess = () => resolve();
+      request.onsuccess = () => {
+        // Clear cache since data changed
+        dbCache.clear();
+        resolve();
+      };
       request.onerror = () => reject(request.error);
     });
   }
@@ -70,7 +97,11 @@
       const transaction = db.transaction([STORE_NAME], 'readwrite');
       const store = transaction.objectStore(STORE_NAME);
       const request = store.delete(fileName);
-      request.onsuccess = () => resolve();
+      request.onsuccess = () => {
+        // Clear cache since data changed
+        dbCache.clear();
+        resolve();
+      };
       request.onerror = () => reject(request.error);
     });
   }
@@ -87,15 +118,30 @@
     });
   }
   
-  // Get stored manifest from IndexedDB
+  // Get stored manifest from IndexedDB with caching
   async function getStoredManifest() {
+    // Return cached result if valid
+    if (dbCache.storedManifest !== null && dbCache.isValid()) {
+      return dbCache.storedManifest;
+    }
+    
     await openDatabase();
     return new Promise((resolve, reject) => {
       const transaction = db.transaction([STORE_NAME], 'readonly');
       const store = transaction.objectStore(STORE_NAME);
       const request = store.get('_manifest');
-      request.onsuccess = () => resolve(request.result ? request.result.data : null);
-      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        const manifest = request.result ? request.result.data : null;
+        // Cache the result
+        dbCache.storedManifest = manifest;
+        dbCache.lastChecked = Date.now();
+        resolve(manifest);
+      };
+      request.onerror = () => {
+        dbCache.storedManifest = null;
+        dbCache.lastChecked = Date.now();
+        reject(request.error);
+      };
     });
   }
   
@@ -106,7 +152,11 @@
       const transaction = db.transaction([STORE_NAME], 'readwrite');
       const store = transaction.objectStore(STORE_NAME);
       const request = store.put({ fileName: '_manifest', data: manifest, timestamp: Date.now() });
-      request.onsuccess = () => resolve();
+      request.onsuccess = () => {
+        // Clear cache since data changed
+        dbCache.clear();
+        resolve();
+      };
       request.onerror = () => reject(request.error);
     });
   }
@@ -177,15 +227,24 @@
     return (getTotalSizeKB() / 1024).toFixed(1);
   }
   
-  // Check if audio is downloaded
+  // Check if audio is downloaded with caching
   async function isAudioDownloaded() {
     try {
+      // Return cached result if valid
+      if (dbCache.isAudioDownloaded !== null && dbCache.isValid()) {
+        return dbCache.isAudioDownloaded;
+      }
+      
       await openDatabase();
       const transaction = db.transaction([STORE_NAME], 'readonly');
       const store = transaction.objectStore(STORE_NAME);
       
       const allFiles = [...currentAudioFiles.music, ...currentAudioFiles.sounds];
-      if (allFiles.length === 0) return false;
+      if (allFiles.length === 0) {
+        dbCache.isAudioDownloaded = false;
+        dbCache.lastChecked = Date.now();
+        return false;
+      }
       
       return new Promise((resolve) => {
         const countRequest = store.count();
@@ -193,12 +252,24 @@
           let count = countRequest.result;
           const hasManifest = count > 0;
           const actualFileCount = hasManifest ? count - 1 : count;
-          resolve(actualFileCount >= allFiles.length);
+          const isDownloaded = actualFileCount >= allFiles.length;
+          
+          // Cache the result
+          dbCache.isAudioDownloaded = isDownloaded;
+          dbCache.lastChecked = Date.now();
+          
+          resolve(isDownloaded);
         };
-        countRequest.onerror = () => resolve(false);
+        countRequest.onerror = () => {
+          dbCache.isAudioDownloaded = false;
+          dbCache.lastChecked = Date.now();
+          resolve(false);
+        };
       });
     } catch (error) {
       console.error('Error checking downloaded status:', error);
+      dbCache.isAudioDownloaded = false;
+      dbCache.lastChecked = Date.now();
       return false;
     }
   }
@@ -457,7 +528,7 @@
         transform: translate(-50%, -50%);
         z-index: 10001;
         background: rgba(20, 20, 28, 0.98);
-        backdrop-filter: blur(24px);
+        backdrop-filter: blur(12px);
         border-radius: 28px;
         padding: 28px 32px;
         text-align: center;
@@ -638,7 +709,7 @@
       transform: translate(-50%, -50%);
       z-index: 10000;
       background: rgba(20, 20, 28, 0.98);
-      backdrop-filter: blur(24px);
+      backdrop-filter: blur(12px);
       border-radius: 28px;
       padding: 28px 32px;
       text-align: center;
@@ -813,6 +884,51 @@
     }
   }
 
+  // ===== HARDWARE ACCELERATION DETECTION =====
+  
+  // Detect hardware acceleration support
+  function hasHardwareAcceleration() {
+    // Check for 3D transforms support
+    const testEl = document.createElement('div');
+    testEl.style.transform = 'translate3d(0,0,0)';
+    testEl.style.webkitTransform = 'translate3d(0,0,0)';
+    
+    // Check if transform was applied
+    const hasTransform = testEl.style.transform !== '' || testEl.style.webkitTransform !== '';
+    
+    // Check for will-change support
+    const hasWillChange = 'willChange' in document.documentElement.style;
+    
+    // Check for CSS containment support
+    const hasContainment = 'CSS' in window && 'supports' in window.CSS && 
+                         window.CSS.supports('contain', 'strict');
+    
+    return {
+      supported: hasTransform && hasWillChange,
+      hasTransform3d: hasTransform,
+      hasWillChange: hasWillChange,
+      hasContainment: hasContainment
+    };
+  }
+  
+  // Apply hardware acceleration optimizations
+  function applyHardwareAcceleration() {
+    const hwAccel = hasHardwareAcceleration();
+    
+    if (hwAccel.supported) {
+      document.body.classList.add('hardware-accelerated');
+      console.log('Hardware acceleration detected and enabled');
+    } else {
+      document.body.classList.add('no-hardware-acceleration');
+      console.log('Hardware acceleration not available, using fallback');
+    }
+    
+    return hwAccel;
+  }
+  
+  // Initialize hardware acceleration detection
+  const hardwareSupport = applyHardwareAcceleration();
+
   // ===== UI COMPONENTS =====
   
   // 30 unique emoji variants for the center icon
@@ -889,12 +1005,24 @@
     if (state.textAnimationSpeed === 'none') {
       letters.forEach(letter => {
         letter.style.animation = 'none';
+        letter.removeAttribute('data-animation');
       });
     } else {
       letters.forEach((letter, index) => {
         const delay = index * 0.12;
-        letter.style.animation = `waveTravel ${speedValue}s ease-in-out infinite`;
-        letter.style.animationDelay = `${delay}s`;
+        
+        // Add data attribute for CSS hardware acceleration
+        letter.setAttribute('data-animation', state.textAnimationSpeed);
+        
+        // Use CSS animations when hardware acceleration is available
+        if (hardwareSupport.supported) {
+          // CSS will handle animation via data attributes
+          letter.style.animationDelay = `${delay}s`;
+        } else {
+          // Fallback to JavaScript-controlled animation
+          letter.style.animation = `waveTravel ${speedValue}s ease-in-out infinite`;
+          letter.style.animationDelay = `${delay}s`;
+        }
       });
     }
   }
@@ -1008,6 +1136,13 @@
     const durationSec = speedToDuration(state.speed);
     const duration = `${durationSec}s`;
     
+    // Add data attribute for CSS hardware acceleration
+    secondLight.setAttribute('data-movement', state.movement);
+    
+    // Set CSS custom properties for duration
+    document.documentElement.style.setProperty('--bounce-duration', duration);
+    document.documentElement.style.setProperty('--orbit-duration', duration);
+    
     secondLight.style.animation = "none";
     secondLight.offsetHeight;
     
@@ -1027,7 +1162,14 @@
       secondLight.style.top = "";
       secondLight.style.left = "";
       secondLight.style.transform = "";
-      secondLight.style.animation = `bounceSmooth ${duration} ease-in-out infinite`;
+      
+      if (hardwareSupport.supported) {
+        // CSS will handle animation via data attribute
+        secondLight.style.animation = '';
+      } else {
+        // Fallback to JavaScript-controlled animation
+        secondLight.style.animation = `bounceSmooth ${duration} ease-in-out infinite`;
+      }
       return;
     }
     
@@ -1036,7 +1178,14 @@
       secondLight.style.top = "50%";
       secondLight.style.left = "50%";
       secondLight.style.transform = "translate(-50%, -50%)";
-      secondLight.style.animation = `orbitAroundMain ${duration} linear infinite`;
+      
+      if (hardwareSupport.supported) {
+        // CSS will handle animation via data attribute
+        secondLight.style.animation = '';
+      } else {
+        // Fallback to JavaScript-controlled animation
+        secondLight.style.animation = `orbitAroundMain ${duration} linear infinite`;
+      }
     }
   }
 
@@ -1127,47 +1276,65 @@
     }, 200);
   }
 
+  // Debounced save function to prevent excessive saves
+  let saveTimeout = null;
+  let lastSaveTime = 0;
+  
   function autoSaveSettings() {
     if (settingsDiv && !settingsDiv.classList.contains('hidden')) {
-      const hasChanges = (
-        state.mainColor !== hexToRgb(mainColorPicker.value) ||
-        state.secondColor !== hexToRgb(secondColorPicker.value) ||
-        state.movement !== movementSelect.value ||
-        state.speed !== Number(speedSlider.value) ||
-        state.mainPosition !== mainPositionSelect.value ||
-        state.textAnimationSpeed !== (() => {
+      // Clear existing timeout
+      if (saveTimeout) {
+        clearTimeout(saveTimeout);
+      }
+      
+      // Debounce save with 500ms delay
+      saveTimeout = setTimeout(() => {
+        const now = Date.now();
+        
+        // Prevent saves more frequently than every 1 second
+        if (now - lastSaveTime < 1000) {
+          return;
+        }
+        
+        const currentTextAnimationSpeed = (() => {
           if (speedNone.classList.contains('active')) return 'none';
           if (speedSlow.classList.contains('active')) return 'slow';
           if (speedMedium.classList.contains('active')) return 'medium';
           if (speedFast.classList.contains('active')) return 'fast';
           return state.textAnimationSpeed;
-        })() ||
-        state.mainLightSize !== Number(mainLightSizeSlider?.value) ||
-        state.secondLightSize !== Number(secondLightSizeSlider?.value)
-      );
-      
-      if (hasChanges) {
-        state.mainColor = hexToRgb(mainColorPicker.value);
-        state.secondColor = hexToRgb(secondColorPicker.value);
-        state.movement = movementSelect.value;
-        state.speed = Number(speedSlider.value);
-        state.mainPosition = mainPositionSelect.value;
-        if (mainLightSizeSlider) state.mainLightSize = Number(mainLightSizeSlider.value);
-        if (secondLightSizeSlider) state.secondLightSize = Number(secondLightSizeSlider.value);
+        })();
         
-        if (speedNone.classList.contains('active')) state.textAnimationSpeed = 'none';
-        else if (speedSlow.classList.contains('active')) state.textAnimationSpeed = 'slow';
-        else if (speedMedium.classList.contains('active')) state.textAnimationSpeed = 'medium';
-        else if (speedFast.classList.contains('active')) state.textAnimationSpeed = 'fast';
+        const hasChanges = (
+          state.mainColor !== hexToRgb(mainColorPicker.value) ||
+          state.secondColor !== hexToRgb(secondColorPicker.value) ||
+          state.movement !== movementSelect.value ||
+          state.speed !== Number(speedSlider.value) ||
+          state.mainPosition !== mainPositionSelect.value ||
+          state.textAnimationSpeed !== currentTextAnimationSpeed ||
+          state.mainLightSize !== Number(mainLightSizeSlider?.value) ||
+          state.secondLightSize !== Number(secondLightSizeSlider?.value)
+        );
         
-        if (state.mainPosition !== 'custom') {
-          state.mainLightCustomTop = null;
-          state.mainLightCustomLeft = null;
+        if (hasChanges) {
+          state.mainColor = hexToRgb(mainColorPicker.value);
+          state.secondColor = hexToRgb(secondColorPicker.value);
+          state.movement = movementSelect.value;
+          state.speed = Number(speedSlider.value);
+          state.mainPosition = mainPositionSelect.value;
+          state.textAnimationSpeed = currentTextAnimationSpeed;
+          if (mainLightSizeSlider) state.mainLightSize = Number(mainLightSizeSlider.value);
+          if (secondLightSizeSlider) state.secondLightSize = Number(secondLightSizeSlider.value);
+          
+          if (state.mainPosition !== 'custom') {
+            state.mainLightCustomTop = null;
+            state.mainLightCustomLeft = null;
+          }
+          
+          saveToLocal();
+          fullRender();
+          lastSaveTime = now;
         }
-        
-        saveToLocal();
-        fullRender();
-      }
+      }, 500);
     }
   }
 
@@ -1373,12 +1540,14 @@
 
   makeMainLightDraggable();
 
-  // ===== MUSIC PLAYER =====
+  // ===== LAZY LOAD AUDIO SYSTEM =====
   let playlist = [];
   let currentTrack = 0;
-  let audio = new Audio();
+  let audio = null;
   let isPlaying = false;
   let audioBlobUrls = new Map();
+  let audioSystemInitialized = false;
+  let audioCache = new Map(); // Cache audio elements
 
   const playPauseBtn = document.getElementById('playPauseBtn');
   const prevBtn = document.getElementById('prevBtn');
@@ -1391,22 +1560,54 @@
   const artistNameSpan = document.getElementById('artistName');
   const songNameSpan = document.getElementById('songName');
 
-  // Load saved volume
-  const savedVolume = localStorage.getItem('musicVolume');
-  if (savedVolume !== null) {
-    audio.volume = parseFloat(savedVolume);
-    if (volumeSlider) volumeSlider.value = savedVolume * 100;
-  } else {
-    audio.volume = 0.7;
-    if (volumeSlider) volumeSlider.value = 70;
+  // Initialize audio system only when needed
+  function initializeAudioSystem() {
+    if (audioSystemInitialized) return;
+    
+    console.log('Initializing audio system...');
+    audio = new Audio();
+    
+    // Load saved volume
+    const savedVolume = localStorage.getItem('musicVolume');
+    if (savedVolume !== null) {
+      audio.volume = parseFloat(savedVolume);
+      if (volumeSlider) volumeSlider.value = savedVolume * 100;
+    } else {
+      audio.volume = 0.7;
+      if (volumeSlider) volumeSlider.value = 70;
+    }
+    
+    // Set up audio event listeners
+    audio.addEventListener('timeupdate', updateProgress);
+    audio.addEventListener('ended', () => {
+      withAudioCheck(() => nextTrack());
+    });
+    audio.addEventListener('canplay', () => {
+      timeTotal.textContent = formatTime(audio.duration);
+    });
+    
+    // Set up volume control
+    if (volumeSlider) {
+      volumeSlider.addEventListener('input', (e) => {
+        const vol = e.target.value / 100;
+        if (audio) audio.volume = vol;
+        localStorage.setItem('musicVolume', vol);
+      });
+    }
+    
+    audioSystemInitialized = true;
+    console.log('Audio system initialized');
   }
 
-  if (volumeSlider) {
-    volumeSlider.addEventListener('input', (e) => {
-      const vol = e.target.value / 100;
-      audio.volume = vol;
-      localStorage.setItem('musicVolume', vol);
-    });
+  // Get cached audio element or create new one
+  function getAudioElement(fileName) {
+    if (audioCache.has(fileName)) {
+      return audioCache.get(fileName);
+    }
+    
+    const audioElement = new Audio();
+    audioCache.set(fileName, audioElement);
+    return audioElement;
   }
 
   function loadCustomMusic() {
@@ -1506,6 +1707,9 @@
   }
 
   async function loadTrack(index) {
+    initializeAudioSystem(); // Lazy initialize
+    if (!audio) return;
+    
     const track = playlist[index];
     if (!track) return;
     
@@ -1546,23 +1750,24 @@
   }
 
   function updateProgress() {
-    if (audio.duration && !isNaN(audio.duration)) {
-      const percent = (audio.currentTime / audio.duration) * 100;
-      progressFill.style.width = `${percent}%`;
-      timeCurrent.textContent = formatTime(audio.currentTime);
-      timeTotal.textContent = formatTime(audio.duration);
-    }
+    if (!audio || !audio.duration || isNaN(audio.duration)) return;
+    const percent = (audio.currentTime / audio.duration) * 100;
+    progressFill.style.width = `${percent}%`;
+    timeCurrent.textContent = formatTime(audio.currentTime);
+    timeTotal.textContent = formatTime(audio.duration);
   }
 
   function seek(e) {
+    if (!audio || !audio.duration) return;
     const rect = progressBar.getBoundingClientRect();
     const percent = (e.clientX - rect.left) / rect.width;
-    if (audio.duration) {
-      audio.currentTime = percent * audio.duration;
-    }
+    audio.currentTime = percent * audio.duration;
   }
 
   function togglePlayPause() {
+    initializeAudioSystem(); // Lazy initialize
+    if (!audio) return;
+    
     if (isPlaying) {
       audio.pause();
       playPauseBtn.textContent = '▶';
@@ -1576,6 +1781,9 @@
 
   function nextTrack() {
     if (playlist.length === 0) return;
+    initializeAudioSystem(); // Lazy initialize
+    if (!audio) return;
+    
     currentTrack = (currentTrack + 1) % playlist.length;
     loadTrack(currentTrack);
     if (isPlaying) {
@@ -1589,6 +1797,9 @@
 
   function prevTrack() {
     if (playlist.length === 0) return;
+    initializeAudioSystem(); // Lazy initialize
+    if (!audio) return;
+    
     currentTrack = (currentTrack - 1 + playlist.length) % playlist.length;
     loadTrack(currentTrack);
     if (isPlaying) {
@@ -1600,14 +1811,8 @@
     }
   }
 
-  audio.addEventListener('timeupdate', updateProgress);
-  audio.addEventListener('ended', () => {
-    withAudioCheck(() => nextTrack());
-  });
-  audio.addEventListener('canplay', () => {
-    timeTotal.textContent = formatTime(audio.duration);
-  });
-
+  // Audio event listeners are now handled in initializeAudioSystem()
+  // Button event listeners with lazy initialization
   playPauseBtn.addEventListener('click', () => {
     withAudioCheck(() => togglePlayPause());
   });
@@ -1672,6 +1877,11 @@
   };
   
   async function createAudioElement(soundName) {
+    // Check cache first
+    if (audioCache.has(soundName)) {
+      return audioCache.get(soundName);
+    }
+    
     const fileName = soundFiles[soundName];
     const audioUrl = await getAudioUrl(fileName);
     const audio = new Audio();
@@ -1686,6 +1896,8 @@
       console.error(`Error loading sound ${soundName}:`, e);
     });
     
+    // Cache the audio element
+    audioCache.set(soundName, audio);
     return audio;
   }
   
