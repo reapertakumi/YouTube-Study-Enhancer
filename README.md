@@ -19,12 +19,12 @@
 </p>
 
 ## Features
-#### Blocker Page System
+#### Currently Disabled
+Blocker Page System
 - **Core**: Local Html, Beautiful Blocker Page, Curated Lofi Music, Atmosphere Sounds
 - **Tools** Included Pomodor Timer with customizable focus/break durations, 
 A Persistent to-do list that saves to localStorage
 - **New UI design**: Completely redesigned blocker page with Lofi curated Music
-- **Performance boost**: Eliminated injection overhead, resulting in faster page loads
 - **Better reliability**: Redirection system works more consistently across all sites
 
 #### Visual Experience
