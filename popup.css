@@ -1146,10 +1146,7 @@ input:checked + .slider::before {
   transform: translateY(-1px);
 }
 
-/* ============================================ */
 /* PASSWORD MODAL */
-/* ============================================ */
-
 .password-modal {
   position: fixed;
   top: 0;
@@ -1258,10 +1255,7 @@ input:checked + .slider::before {
   transform: translateY(-1px);
 }
 
-/* ============================================ */
 /* SETTINGS MODAL - MODERN TOGGLE BUTTONS */
-/* ============================================ */
-
 .settings-modal {
   position: fixed;
   top: 0;
@@ -1672,10 +1666,7 @@ input:checked + .slider::before {
   text-align: center;
 }
 
-/* ============================================ */
 /* CONFIRM RESET MODAL */
-/* ============================================ */
-
 .confirm-modal {
   position: fixed;
   top: 0;
@@ -1770,9 +1761,7 @@ input:checked + .slider::before {
   transform: translateY(-1px);
 }
 
-/* ============================================ */
-/* CLICKABLE CARDS FEATURE                      */
-/* ============================================ */
+/* CLICKABLE CARDS FEATURE */
 
 .card {
   cursor: pointer;
@@ -1860,10 +1849,7 @@ body.locked .settings-wheel-btn {
   opacity: 1 !important;
 }
 
-/* ============================================ */
-/* VERSION SECTION                              */
-/* ============================================ */
-
+/* VERSION SECTION */
 .version-section {
   text-align: center;
   margin-top: 12px;
@@ -1879,9 +1865,7 @@ body.locked .settings-wheel-btn {
   letter-spacing: 0.3px;
 }
 
-/* ============================================ */
 /* THEME PRESETS - AUTO ADAPT TO LIGHT/DARK MODE */
-/* ============================================ */
 
 /* Default Theme */
 body.theme-default {
@@ -2131,10 +2115,6 @@ body.light-theme.theme-sakura .github-link,
 body.light-theme.theme-sakura .card span {
   color: #4a0024 !important;
 }
-
-/* ============================================ */
-/* NEW THEMES - NEON, RETRO, COFFEE, WINTER    */
-/* ============================================ */
 
 /* Neon Theme */
 body.theme-neon {
@@ -3078,10 +3058,6 @@ body.light-theme.theme-winter ::-webkit-scrollbar-thumb:hover {
   background: #aaaaaa;
 }
 
-/* ============================================ */
-/* LOFI THEME - Cozy Dark & Light Modes        */
-/* ============================================ */
-
 /* Dark LoFi Theme - Cozy, warm, relaxed */
 body.theme-lofi {
   background: linear-gradient(135deg, #1a1410 0%, #2a2018 50%, #1e1814 100%);
@@ -3619,10 +3595,7 @@ body.theme-lofi::-webkit-scrollbar-thumb:hover {
   background: #d4a373;
 }
 
-/* ============================================ */
 /* LOFI LIGHT MODE - Bright, cozy, vinyl vibe  */
-/* ============================================ */
-
 body.light-theme.theme-lofi {
   background: linear-gradient(135deg, #faf3e8 0%, #f0e6d8 50%, #faf0e0 100%);
   position: relative;
@@ -4121,10 +4094,7 @@ body.light-theme.theme-lofi::-webkit-scrollbar-thumb:hover {
   background: #c89a6a;
 }
 
-/* ============================================ */
 /* SAKURA PARTICLES */
-/* ============================================ */
-
 .sakura-particles-container {
   position: fixed;
   top: 0;
@@ -4206,10 +4176,7 @@ body.light-theme.theme-lofi::-webkit-scrollbar-thumb:hover {
   }
 }
 
-/* ============================================ */
-/* WINTER SNOWFLAKE PARTICLES                   */
-/* ============================================ */
-
+/* WINTER SNOWFLAKE PARTICLES */
 .winter-particles-container {
   position: fixed;
   top: 0;
@@ -4372,10 +4339,7 @@ body.light-theme.theme-lofi::-webkit-scrollbar-thumb:hover {
   }
 }
 
-/* ============================================ */
 /* HOTKEY UI */
-/* ============================================ */
-
 .add-hotkey-btn {
   background: rgba(62, 166, 255, 0.14);
   border: 1px solid rgba(62, 166, 255, 0.35);

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "YouTube Study Enhancer",
-  "version": "0.4.3",
+  "version": "0.4.5",
   "description": "Enhance your YouTube studying experience and block distracting sites with custom redirection",
   "permissions": [
     "storage",
