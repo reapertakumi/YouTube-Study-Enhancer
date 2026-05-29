@@ -34,6 +34,13 @@ document.addEventListener('DOMContentLoaded', () => {
     let shortBreakDuration = parseInt(localStorage.getItem('shortBreakDuration')) || 5;
     let longBreakDuration = parseInt(localStorage.getItem('longBreakDuration')) || 15;
 
+    // Helper HTML escaper
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
     // --- Chime Sound ---
     function playChime() {
         const audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -407,39 +414,40 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Music Tab Functionality ---
     const tabs = document.querySelectorAll('.music-tab');
     const dots = document.querySelectorAll('.tab-dot');
-    const collapseBtn = document.getElementById('collapse-btn');
+
+    // --- Music Player Logic ---
     const musicContainer = document.querySelector('.music-player-container');
+    const collapseBtn = document.getElementById('collapse-btn');
+    const soundIcon = document.getElementById('sound-icon');
 
-    // --- Taskbar Functionality ---
-    const pomodoroIcon = document.getElementById('pomodoro-icon');
-    const noteIcon = document.getElementById('note-icon');
-    const trashIcon = document.getElementById('trash-icon');
-    const timerContainer = document.querySelector('.timer-container');
+    // Load saved state from localStorage
+    const isMusicCollapsed = localStorage.getItem('musicPlayerCollapsed') === 'true';
+    if (isMusicCollapsed) {
+        musicContainer.classList.add('collapsed');
+    }
 
-    // Set pomodoro as active by default
-    pomodoroIcon.classList.add('active');
-
-    // Pomodoro icon - show timer
-    pomodoroIcon.onclick = () => {
-        // Remove active class from all icons
-        pomodoroIcon.classList.remove('active');
-        noteIcon.classList.remove('active');
-        
-        // Add active class to pomodoro
-        pomodoroIcon.classList.add('active');
-        
-        // Show timer
-        timerContainer.style.display = 'flex';
-    };
-
-    // Collapse/Expand Music Player
-    collapseBtn.onclick = () => {
+    function toggleMusicPlayer() {
         musicContainer.classList.toggle('collapsed');
         const isCollapsed = musicContainer.classList.contains('collapsed');
-        collapseBtn.innerHTML = isCollapsed 
+        
+        // Save state to localStorage
+        localStorage.setItem('musicPlayerCollapsed', isCollapsed);
+        
+        // Update button arrow direction
+        const arrowHtml = isCollapsed 
             ? '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>'
             : '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>';
-    };
+        
+        if (collapseBtn) collapseBtn.innerHTML = arrowHtml;
+    }
+
+    if (collapseBtn) collapseBtn.onclick = toggleMusicPlayer;
+    if (soundIcon) soundIcon.onclick = toggleMusicPlayer;
+
+    // Initialize collapse button arrow based on saved state
+    if (collapseBtn && isMusicCollapsed) {
+        collapseBtn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>';
+    }
 
     dots.forEach(dot => {
         dot.addEventListener('click', () => {
@@ -453,6 +461,107 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    // --- Task List Logic ---
+    const noteIcon = document.getElementById('note-icon');
+    const taskListEl = document.getElementById('task-list');
+    const clearAllBtn = document.getElementById('clear-all-tasks');
+    const addTaskBtn = document.getElementById('add-task-btn');
+    const progressBar = document.getElementById('task-progress');
+    
+    // Fallback to 3 blank items if no history exists
+    let tasks = JSON.parse(localStorage.getItem('ytEnhancerTasks'));
+    if (!tasks || tasks.length === 0) {
+        tasks = [
+            { text: '', completed: false },
+            { text: '', completed: false },
+            { text: '', completed: false }
+        ];
+    }
+
+    function renderTasks() {
+        taskListEl.innerHTML = '';
+        let completedCount = 0;
+        
+        tasks.forEach((task, index) => {
+            if (task.completed) completedCount++;
+            const li = document.createElement('li');
+            li.className = `task-item ${task.completed ? 'completed' : ''}`;
+            li.innerHTML = `
+                <input type="checkbox" ${task.completed ? 'checked' : ''} data-index="${index}">
+                <input type="text" class="task-text-input" value="${escapeHtml(task.text)}" placeholder="Type a task..." data-index="${index}">
+                <button class="delete-task" data-index="${index}" title="Remove Task">×</button>
+            `;
+            taskListEl.appendChild(li);
+        });
+
+        // Update progress bar tracking
+        const progressPercent = tasks.length === 0 ? 0 : (completedCount / tasks.length) * 100;
+        progressBar.style.width = `${progressPercent}%`;
+
+        // Save current configuration
+        localStorage.setItem('ytEnhancerTasks', JSON.stringify(tasks));
+    }
+
+    noteIcon.onclick = () => {
+        document.body.classList.toggle('show-tasks');
+    };
+
+    // Add structural row functionality
+    addTaskBtn.onclick = () => {
+        tasks.push({ text: '', completed: false });
+        renderTasks();
+        
+        // Auto-focus the fresh row item
+        const currentInputs = taskListEl.querySelectorAll('.task-text-input');
+        if (currentInputs.length > 0) {
+            currentInputs[currentInputs.length - 1].focus();
+        }
+    };
+
+    // Handle interactive updates cleanly without breaking cursor context focus trees
+    taskListEl.oninput = (e) => {
+        if (e.target.classList.contains('task-text-input')) {
+            const index = e.target.dataset.index;
+            tasks[index].text = e.target.value;
+            localStorage.setItem('ytEnhancerTasks', JSON.stringify(tasks));
+        }
+    };
+
+    taskListEl.onclick = (e) => {
+        if (e.target.tagName === 'INPUT' && e.target.type === 'checkbox') {
+            const index = e.target.dataset.index;
+            tasks[index].completed = e.target.checked;
+            renderTasks();
+        } else if (e.target.classList.contains('delete-task')) {
+            const index = e.target.dataset.index;
+            tasks.splice(index, 1);
+            renderTasks();
+        }
+    };
+
+    clearAllBtn.onclick = () => {
+        if (tasks.length > 0 && confirm('Are you sure you want to clear all tasks?')) {
+            tasks = [
+                { text: '', completed: false },
+                { text: '', completed: false },
+                { text: '', completed: false }
+            ];
+            renderTasks();
+        }
+    };
+    
+    // Initial Render execution
+    renderTasks();
+
+    // --- Taskbar Pop Animation ---
+    const taskbarIcons = document.querySelectorAll('.taskbar-icon');
+    
+    taskbarIcons.forEach(icon => {
+        icon.addEventListener('click', () => {
+            icon.classList.add('popping');
+            setTimeout(() => icon.classList.remove('popping'), 200);
+        });
+    });
 
     // --- Initialization ---
     getDB().then(async (db) => {
@@ -488,13 +597,48 @@ document.addEventListener('DOMContentLoaded', () => {
     longInput.value = longBreakDuration;
     
     // Update the mode buttons with saved durations
-    document.querySelector('[data-mode="pomodoro"]').dataset.time = pomodoroDuration * 60;
-    document.querySelector('[data-mode="short"]').dataset.time = shortBreakDuration * 60;
-    document.querySelector('[data-mode="long"]').dataset.time = longBreakDuration * 60;
+    document.querySelector('[data-mode=\"pomodoro\"]').dataset.time = pomodoroDuration * 60;
+    document.querySelector('[data-mode=\"short\"]').dataset.time = shortBreakDuration * 60;
+    document.querySelector('[data-mode=\"long\"]').dataset.time = longBreakDuration * 60;
     
     // Update time display if not running
     if (!isRunning) {
         timeLeft = parseInt(document.querySelector('.mode-btn.active').dataset.time);
         updateDisplay();
     }
+
+    // --- Ambient Mixer Logic ---
+    const ambientItems = document.querySelectorAll('.ambient-item');
+    
+    ambientItems.forEach(item => {
+        const slider = item.querySelector('.ambient-slider');
+        const audio = item.querySelector('audio');
+        
+        item.addEventListener('click', (e) => {
+            // Prevent toggling if the user is clicking/dragging the slider
+            if (e.target === slider) return;
+            
+            item.classList.toggle('active');
+            
+            if (item.classList.contains('active')) {
+                // Play audio and set volume to slider's current value
+                if (audio) {
+                    audio.volume = slider.value;
+                    audio.play().catch(err => console.log("Audio requires actual file source to play.", err));
+                }
+            } else {
+                // Stop audio
+                if (audio) {
+                    audio.pause();
+                }
+            }
+        });
+        
+        // Update volume live as the slider moves
+        slider.addEventListener('input', (e) => {
+            if (audio) {
+                audio.volume = e.target.value;
+            }
+        });
+    });
 });

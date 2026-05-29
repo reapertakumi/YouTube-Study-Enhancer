@@ -34,12 +34,91 @@
         </div>
     </main>
 
+    <section class="task-list-container">
+        <div class="task-header">
+            <h3>Tasks</h3>
+            <button id="clear-all-tasks" class="clear-all-btn">Clear All</button>
+        </div>
+        
+        <div class="task-progress-wrapper">
+            <div id="task-progress" class="task-progress-bar"></div>
+        </div>
+
+        <ul id="task-list" class="task-list">
+        </ul>
+
+        <button id="add-task-btn" class="add-task-btn">+</button>
+    </section>
+
     <section class="music-player-container">
         <div class="player-card">
             <button class="collapse-btn" id="collapse-btn">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
             </button>
+            
             <div class="music-tab" data-tab="1">
+                <div class="ambient-grid">
+                    <div class="ambient-item">
+                        <div class="ambient-inner"><span class="ambient-icon">🌧️</span><span class="ambient-text">Rain</span></div>
+                        <input type="range" class="ambient-slider" min="0" max="1" step="0.01" value="0.25">
+                        <audio loop preload="none" src="https://raw.githubusercontent.com/reapertakumi/YouTube-Study-Enhancer/main/sounds/rain.mp3"></audio>
+                    </div>
+                    <div class="ambient-item">
+                        <div class="ambient-inner"><span class="ambient-icon">⚡</span><span class="ambient-text">Thunder</span></div>
+                        <input type="range" class="ambient-slider" min="0" max="1" step="0.01" value="0.25">
+                        <audio loop preload="none" src="https://raw.githubusercontent.com/reapertakumi/YouTube-Study-Enhancer/main/sounds/thunder.mp3"></audio>
+                    </div>
+                    <div class="ambient-item">
+                        <div class="ambient-inner"><span class="ambient-icon">🌊</span><span class="ambient-text">Ocean</span></div>
+                        <input type="range" class="ambient-slider" min="0" max="1" step="0.01" value="0.25">
+                        <audio loop preload="none" src="https://raw.githubusercontent.com/reapertakumi/YouTube-Study-Enhancer/main/sounds/ocean.mp3"></audio>
+                    </div>
+                    <div class="ambient-item">
+                        <div class="ambient-inner"><span class="ambient-icon">☀️</span><span class="ambient-text">Morning</span></div>
+                        <input type="range" class="ambient-slider" min="0" max="1" step="0.01" value="0.25">
+                        <audio loop preload="none" src="https://raw.githubusercontent.com/reapertakumi/YouTube-Study-Enhancer/main/sounds/summer-morning.mp3"></audio>
+                    </div>
+                    <div class="ambient-item">
+                        <div class="ambient-inner"><span class="ambient-icon">🌙</span><span class="ambient-text">Night</span></div>
+                        <input type="range" class="ambient-slider" min="0" max="1" step="0.01" value="0.25">
+                        <audio loop preload="none" src="https://raw.githubusercontent.com/reapertakumi/YouTube-Study-Enhancer/main/sounds/summer-night.mp3"></audio>
+                    </div>
+                    <div class="ambient-item">
+                        <div class="ambient-inner"><span class="ambient-icon">🏞️</span><span class="ambient-text">River</span></div>
+                        <input type="range" class="ambient-slider" min="0" max="1" step="0.01" value="0.25">
+                        <audio loop preload="none" src="https://raw.githubusercontent.com/reapertakumi/YouTube-Study-Enhancer/main/sounds/river.mp3"></audio>
+                    </div>
+                    <div class="ambient-item">
+                        <div class="ambient-inner"><span class="ambient-icon">🔥</span><span class="ambient-text">Fire</span></div>
+                        <input type="range" class="ambient-slider" min="0" max="1" step="0.01" value="0.25">
+                        <audio loop preload="none" src="https://raw.githubusercontent.com/reapertakumi/YouTube-Study-Enhancer/main/sounds/fire.mp3"></audio>
+                    </div>
+                    <div class="ambient-item">
+                        <div class="ambient-inner"><span class="ambient-icon">🐦</span><span class="ambient-text">Bird</span></div>
+                        <input type="range" class="ambient-slider" min="0" max="1" step="0.01" value="0.25">
+                        <audio loop preload="none" src="https://raw.githubusercontent.com/reapertakumi/YouTube-Study-Enhancer/main/sounds/bird.mp3"></audio>
+                    </div>
+                    <div class="ambient-item">
+                        <div class="ambient-inner"><span class="ambient-icon">☕</span><span class="ambient-text">Coffee</span></div>
+                        <input type="range" class="ambient-slider" min="0" max="1" step="0.01" value="0.25">
+                        <audio loop preload="none" src="https://raw.githubusercontent.com/reapertakumi/YouTube-Study-Enhancer/main/sounds/coffee-store.mp3"></audio>
+                    </div>
+                    <div class="ambient-item">
+                        <div class="ambient-inner"><span class="ambient-icon">🟤</span><span class="ambient-text">Brown</span></div>
+                        <input type="range" class="ambient-slider" min="0" max="1" step="0.01" value="0.25">
+                        <audio loop preload="none" src="https://raw.githubusercontent.com/reapertakumi/YouTube-Study-Enhancer/main/sounds/brown-noise.mp3"></audio>
+                    </div>
+                    <div class="ambient-item">
+                        <div class="ambient-inner"><span class="ambient-icon">⚪</span><span class="ambient-text">White</span></div>
+                        <input type="range" class="ambient-slider" min="0" max="1" step="0.01" value="0.25">
+                        <audio loop preload="none" src="https://raw.githubusercontent.com/reapertakumi/YouTube-Study-Enhancer/main/sounds/white-noise.mp3"></audio>
+                    </div>
+                    <div class="ambient-item">
+                        <div class="ambient-inner"><span class="ambient-icon">🌸</span><span class="ambient-text">Pink</span></div>
+                        <input type="range" class="ambient-slider" min="0" max="1" step="0.01" value="0.25">
+                        <audio loop preload="none" src="https://raw.githubusercontent.com/reapertakumi/YouTube-Study-Enhancer/main/sounds/pink-noise.mp3"></audio>
+                    </div>
+                </div>
             </div>
 
             <div class="music-tab active" data-tab="2">
@@ -123,13 +202,13 @@
     </div>
 
     <div class="taskbar">
-        <div class="taskbar-icon" id="trash-icon" title="Trash">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        <div class="taskbar-icon" id="sound-icon" title="Toggle Music">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
         </div>
         <div class="taskbar-icon" id="pomodoro-icon" title="Pomodoro">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
         </div>
-        <div class="taskbar-icon" id="note-icon" title="Notes">
+        <div class="taskbar-icon" id="note-icon" title="Tasks">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
         </div>
     </div>
