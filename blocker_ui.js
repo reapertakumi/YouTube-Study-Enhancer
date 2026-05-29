@@ -268,7 +268,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const activeMode = document.querySelector('.mode-btn.active').textContent;
             document.title = `${timeString} - ${activeMode.charAt(0).toUpperCase() + activeMode.slice(1)} Timer`;
         } else {
-            document.title = "yt study enhancer";
+            document.title = "YT Study Enhancer";
         }
     }
 
@@ -284,7 +284,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 clearInterval(timerId);
                 isRunning = false;
                 startBtn.textContent = 'start';
-                document.title = "yt study enhancer";
+                document.title = "YT Study Enhancer";
                 playChime();
                 
                 // Always switch to next mode
@@ -336,6 +336,7 @@ document.addEventListener('DOMContentLoaded', () => {
         targetBtn.classList.add('active');
         timeLeft = parseInt(targetBtn.dataset.time);
         updateDisplay();
+        updateModeIndicator(); // Ensures the slider follows the mode change
     }
 
     // --- Event Listeners ---
