@@ -8,8 +8,19 @@
 </head>
 <body>
 
+    <button id="settings-btn" class="icon-btn settings-rotate" title="Background Settings" style="position: fixed; top: 20px; right: 20px; z-index: 1001; background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 50%; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.3s ease;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l-.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06-.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06-.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </button>
+
+    <div class="quote-display">
+        <p class="quote-text">Loading quote...</p>
+        <p class="quote-author"></p>
+    </div>
+
     <header class="brand-header">
-        <h1>YT Study Enhancer</h1>
+        <a href="https://github.com/reapertakumi/YouTube-Study-Enhancer" target="_blank" class="brand-link">
+            <h1>YT Study Enhancer</h1>
+        </a>
     </header>
 
     <main class="timer-container">
@@ -20,7 +31,14 @@
             <button class="mode-btn" data-time="900" data-mode="long">long break</button>
         </div>
 
-        <div class="time-display">25:00</div>
+        <div class="time-display" id="pomodoro-display">25:00</div>
+        <div class="clock-wrapper" id="clock-wrapper" style="display: none;">
+            <div class="time-display" id="clock-display">00:00:00</div>
+            <div class="date-display" id="date-display">
+                <span class="day-part" id="day-part"></span>
+                <span class="date-part" id="date-part"></span>
+            </div>
+        </div>
 
         <div class="controls">
             <button id="start-btn" class="control-btn main-btn">start</button>
@@ -121,7 +139,51 @@
                 </div>
             </div>
 
-            <div class="music-tab active" data-tab="2">
+            <div class="music-tab" data-tab="2">
+                <div class="music-player-content">
+                    <div class="now-playing">
+                        <span id="song-title">Loading...</span>
+                    </div>
+                    <div class="player-controls">
+                        <button id="rewind-btn" class="control-btn" title="Previous">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="11 19 2 12 11 5 11 19"/><polygon points="22 19 13 12 22 5 22 19"/></svg>
+                        </button>
+                        <button id="play-btn" class="control-btn main-btn" title="Play/Pause">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                        </button>
+                        <button id="forward-btn" class="control-btn" title="Next">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="13 5 22 12 13 19 13 5"/><polygon points="2 5 11 12 2 19 2 5"/></svg>
+                        </button>
+                        <button id="loop-btn" class="control-btn" title="Loop">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+                        </button>
+                    </div>
+                    <div class="volume-control-wrapper">
+                        <svg class="volume-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+                        <input type="range" id="volume-slider" class="volume-slider" min="0" max="1" step="0.01" value="0.8">
+                    </div>
+                    <div class="progress-control">
+                        <input type="range" id="progress-bar" class="progress-bar" min="0" max="100" step="0.1" value="0">
+                    </div>
+                    <div class="music-library">
+                        <div class="library-header">
+                            <span>Library</span>
+                            <div class="search-container">
+                                <input type="text" id="music-search" class="music-search" placeholder="Search music...">
+                                <button id="search-music-btn" class="search-music-btn" title="Search music">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                                </button>
+                            </div>
+                            <button id="upload-music-btn" class="upload-music-btn" title="Upload your own music">+</button>
+                        </div>
+                        <div id="song-list" class="song-list"></div>
+                    </div>
+                    <input type="file" id="music-uploader" accept="audio/*" multiple style="display: none;">
+                    <audio id="music-audio" preload="none"></audio>
+                </div>
+            </div>
+
+            <div class="music-tab active" data-tab="3">
                 <iframe
                     src="https://open.spotify.com/embed/playlist/0vvXsWCC9xrXsKd4FyS8kM?theme=0"
                     width="100%"
@@ -133,16 +195,11 @@
 
             <div class="music-tabs">
                 <span class="tab-dot" data-target="1"></span>
-                <span class="tab-dot active" data-target="2"></span>
+                <span class="tab-dot" data-target="2"></span>
+                <span class="tab-dot active" data-target="3"></span>
             </div>
         </div>
     </section>
-
-    <footer class="settings-container">
-        <button id="settings-btn" class="icon-btn settings-rotate" title="Background Settings">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l-.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06-.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06-.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-        </button>
-    </footer>
 
     <div id="settings-modal" class="modal">
         <div class="modal-content">
@@ -152,6 +209,18 @@
             </div>
             <input type="file" id="bg-uploader" accept="image/*" style="display: none;">
             <button id="close-modal-btn" class="close-modal-btn">Close</button>
+        </div>
+    </div>
+
+    <div id="shortcut-modal" class="modal">
+        <div class="modal-content">
+            <h3>Add Website Shortcut</h3>
+            <input type="text" id="shortcut-url" placeholder="Enter website URL (e.g., https://example.com)" style="width: 100%; padding: 10px; margin: 15px 0; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; background: rgba(255,255,255,0.05); color: white; font-size: 1rem;">
+            <p style="font-size: 0.8rem; color: rgba(255,255,255,0.5); margin: 0 0 15px 0; text-align: center;">Right-click on shortcut to edit</p>
+            <div style="display: flex; gap: 10px; justify-content: center;">
+                <button id="save-shortcut-btn" class="close-modal-btn">Save</button>
+                <button id="cancel-shortcut-btn" class="close-modal-btn">Cancel</button>
+            </div>
         </div>
     </div>
 
@@ -202,14 +271,26 @@
     </div>
 
     <div class="taskbar">
+        <div class="taskbar-icon browser-shortcut" id="browser-shortcut-1" title="Website Shortcut 1">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+        </div>
+        <div class="taskbar-icon browser-shortcut" id="browser-shortcut-2" title="Website Shortcut 2">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+        </div>
         <div class="taskbar-icon" id="sound-icon" title="Toggle Music">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
         </div>
-        <div class="taskbar-icon" id="pomodoro-icon" title="Pomodoro">
+        <div class="taskbar-icon" id="clock-icon" title="Clock">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
         </div>
         <div class="taskbar-icon" id="note-icon" title="Tasks">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
+        </div>
+        <div class="taskbar-icon browser-shortcut" id="browser-shortcut-3" title="Website Shortcut 3">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+        </div>
+        <div class="taskbar-icon browser-shortcut" id="browser-shortcut-4" title="Website Shortcut 4">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
         </div>
     </div>
 
