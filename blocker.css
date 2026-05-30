@@ -21,12 +21,12 @@ body {
     justify-content: center;
     align-items: center;
     color: #ffffff;
-    background: var(--bg-overlay), var(--default-sky);
+    background: var(--bg-overlay), url('https://raw.githubusercontent.com/reapertakumi/YouTube-Study-Enhancer/main/BG/winterhouse.jpg');
     background-size: cover;
     background-position: center;
     background-repeat: no-repeat;
     overflow: hidden;
-    transition: background-image 2s ease-in-out;
+    transition: background-image 5s ease-in-out;
 }
 
 .quote-display {
