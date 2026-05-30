@@ -1,6 +1,6 @@
 :root {
     --font-main: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    --bg-overlay: linear-gradient(rgba(26, 21, 44, 0.45), rgba(15, 12, 28, 0.65));
+    --bg-overlay: linear-gradient(rgba(0, 0, 0, 0.9), rgba(0, 0, 0, 0.95));
     --default-sky: linear-gradient(135deg, #2b2347 0%, #5d466b 50%, #9b6c84 100%);
     --glass-bg: rgba(15, 15, 23, 0.75);
     --glass-border: rgba(255, 255, 255, 0.15);
@@ -26,7 +26,39 @@ body {
     background-position: center;
     background-repeat: no-repeat;
     overflow: hidden;
-    transition: background-image 5s ease-in-out;
+    position: relative;
+}
+
+body::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-image: var(--bg-image-1, none);
+    opacity: var(--bg-opacity-1, 0);
+    transition: opacity 0.5s ease-in-out;
+    z-index: -1;
+}
+
+body::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-image: var(--bg-image-2, none);
+    opacity: var(--bg-opacity-2, 0);
+    transition: opacity 0.5s ease-in-out;
+    z-index: -2;
 }
 
 .quote-display {
@@ -265,7 +297,7 @@ body.show-tasks .timer-container {
     align-items: center;
     z-index: 2000;
     opacity: 0;
-    transition: opacity 0.3s ease;
+    transition: opacity 0.2s ease;
 }
 
 .modal.show {
@@ -282,7 +314,7 @@ body.show-tasks .timer-container {
     box-shadow: 0 20px 40px rgba(0,0,0,0.4);
     transform: scale(0.9);
     opacity: 0;
-    transition: transform 0.3s ease, opacity 0.3s ease;
+    transition: transform 0.2s ease, opacity 0.2s ease;
     overflow: visible;
 }
 
@@ -411,6 +443,21 @@ body.show-tasks .timer-container {
     margin-top: 20px;
     overflow-x: hidden;
     padding: 5px;
+}
+
+/* Settings Toggles Container */
+.settings-toggles {
+    display: flex;
+    flex-direction: row;
+    gap: 24px;
+    margin-top: 24px;
+    padding-top: 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    justify-content: center;
+}
+
+.settings-toggles .toggle-option input[type="checkbox"] {
+    accent-color: #1e1e2f;
 }
 
 .gallery::-webkit-scrollbar {
@@ -1290,7 +1337,7 @@ body.show-tasks .task-list-container {
     max-height: 500px;
     opacity: 1;
     transition: max-height 0.4s ease-in-out, opacity 0.4s ease-in-out, margin 0.4s ease-in-out, padding 0.4s ease-in-out;
-    overflow: hidden;
+    overflow: visible;
 }
 
 .spotify-controls-wrapper.collapsed {
@@ -1452,7 +1499,7 @@ body.show-tasks .task-list-container {
     border: 1px solid var(--glass-border);
     border-radius: 12px;
     padding: 12px;
-    z-index: 100;
+    z-index: 10000;
     backdrop-filter: blur(12px);
 }
 
@@ -1523,7 +1570,6 @@ body.show-tasks .task-list-container {
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 8px;
     padding: 8px 10px;
-    gap: 8px;
 }
 
 .history-url {
@@ -1533,6 +1579,7 @@ body.show-tasks .task-list-container {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    min-width: 0;
 }
 
 .history-load-btn {

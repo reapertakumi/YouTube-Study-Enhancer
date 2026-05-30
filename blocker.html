@@ -68,7 +68,7 @@
         <button id="add-task-btn" class="add-task-btn">+</button>
     </section>
 
-    <section class="music-player-container">
+    <section class="music-player-container collapsed">
         <div class="player-card">
             <button class="collapse-btn" id="collapse-btn">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
@@ -245,6 +245,18 @@
                 <div class="bg-option upload-btn" id="upload-trigger" title="Upload your own image">+</div>
             </div>
             <input type="file" id="bg-uploader" accept="image/*" style="display: none;">
+            
+            <div class="settings-toggles">
+                <label class="toggle-option">
+                    <input type="checkbox" id="enable-quotes" checked>
+                    <span class="toggle-label">Show Quotes</span>
+                </label>
+                <label class="toggle-option">
+                    <input type="checkbox" id="enable-shortcuts" checked>
+                    <span class="toggle-label">Show Shortcuts</span>
+                </label>
+            </div>
+            
             <button id="close-modal-btn" class="close-modal-btn">Close</button>
         </div>
     </div>
