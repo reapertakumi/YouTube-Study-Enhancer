@@ -14,17 +14,9 @@ let domainModalOverlay = null;
 let isLocked = false;
 let editingHotkeyIndex = null;
 
-// Particle containers (dynamically created)
-let sakuraContainer = null;
-let winterContainer = null;
-let sakuraInterval = null;
-let winterInterval = null;
-let sakuraPetals = [];
-let winterSnowflakes = [];
-
 // Default blockable sites configuration
 const DEFAULT_BLOCK_SITES = [
-  { id: "blockYoutube", name: "YouTube", deletable: true },
+  { id: "blockYoutube", name: "YouTube", deletable: false },
   { id: "shorts", name: "YouTube Shorts", deletable: false },
   { id: "instagram", name: "Instagram", deletable: true },
   { id: "twitter", name: "X (Twitter)", deletable: true },
@@ -80,13 +72,11 @@ document.addEventListener("DOMContentLoaded", () => {
     const savedPreset = data.themePreset || 'default';
     applyThemePreset(savedPreset);
     
-    // Only start particles if enabled AND theme supports them
-    if (data.particlesEnabled === true) {
-      if (savedPreset === 'sakura') {
-        startSakuraParticles();
-      } else if (savedPreset === 'winter') {
-        startWinterParticles();
-      }
+    if (data.particlesEnabled === true && savedPreset === 'sakura') {
+      startSakuraParticles();
+    }
+    if (data.particlesEnabled === true && savedPreset === 'winter') {
+      startWinterParticles();
     }
     
     const youtubeContent = document.getElementById('youtubeContent');
@@ -229,174 +219,6 @@ document.addEventListener("DOMContentLoaded", () => {
     initClickableCards();
   }, 100);
 });
-
-// ============ PARTICLE CONTAINER MANAGEMENT ============
-
-function getSakuraContainer() {
-  if (!sakuraContainer) {
-    sakuraContainer = document.createElement('div');
-    sakuraContainer.id = 'sakuraParticles';
-    sakuraContainer.className = 'sakura-particles-container';
-    document.body.appendChild(sakuraContainer);
-  }
-  return sakuraContainer;
-}
-
-function getWinterContainer() {
-  if (!winterContainer) {
-    winterContainer = document.createElement('div');
-    winterContainer.id = 'winterParticles';
-    winterContainer.className = 'winter-particles-container';
-    document.body.appendChild(winterContainer);
-  }
-  return winterContainer;
-}
-
-function startSakuraParticles() {
-  if (sakuraInterval) return;
-  
-  const container = getSakuraContainer();
-  const isLight = document.body.classList.contains('light-theme');
-  
-  sakuraInterval = setInterval(() => {
-    createSakuraPetal(container, isLight);
-  }, 300 + Math.random() * 500);
-  
-  for (let i = 0; i < 5; i++) {
-    setTimeout(() => createSakuraPetal(container, isLight), i * 200);
-  }
-}
-
-function stopSakuraParticles() {
-  if (sakuraInterval) {
-    clearInterval(sakuraInterval);
-    sakuraInterval = null;
-  }
-  
-  sakuraPetals = [];
-  
-  if (sakuraContainer) {
-    sakuraContainer.remove();
-    sakuraContainer = null;
-  }
-}
-
-function startWinterParticles() {
-  if (winterInterval) return;
-  
-  const container = getWinterContainer();
-  const isLight = document.body.classList.contains('light-theme');
-  
-  winterInterval = setInterval(() => {
-    createSnowflake(container, isLight);
-  }, 200 + Math.random() * 400);
-  
-  for (let i = 0; i < 8; i++) {
-    setTimeout(() => createSnowflake(container, isLight), i * 150);
-  }
-}
-
-function stopWinterParticles() {
-  if (winterInterval) {
-    clearInterval(winterInterval);
-    winterInterval = null;
-  }
-  
-  winterSnowflakes = [];
-  
-  if (winterContainer) {
-    winterContainer.remove();
-    winterContainer = null;
-  }
-}
-
-function createSakuraPetal(container, isLight) {
-  if (!container || !container.parentNode) return;
-  
-  const petal = document.createElement('div');
-  const size = 6 + Math.random() * 10;
-  const startLeft = Math.random() * 100;
-  const duration = 4 + Math.random() * 5;
-  const delay = Math.random() * 2;
-  const swayType = Math.random() > 0.5 ? 'sakuraSway' : 'sakuraSwayWide';
-  const variant = Math.random();
-  
-  petal.classList.add('sakura-petal');
-  if (isLight) {
-    petal.classList.add('white');
-  } else if (variant > 0.7) {
-    petal.classList.add('dark');
-  }
-  
-  petal.style.left = `${startLeft}%`;
-  petal.style.width = `${size}px`;
-  petal.style.height = `${size}px`;
-  petal.style.animation = `sakuraFall ${duration}s linear ${delay}s forwards, ${swayType} ${duration * 0.8}s ease-in-out ${delay}s infinite`;
-  petal.style.opacity = 0.6 + Math.random() * 0.4;
-  
-  container.appendChild(petal);
-  sakuraPetals.push(petal);
-  
-  setTimeout(() => {
-    if (petal.parentNode) {
-      petal.remove();
-    }
-    sakuraPetals = sakuraPetals.filter(p => p !== petal);
-  }, (duration + delay) * 1000);
-}
-
-function createSnowflake(container, isLight) {
-  if (!container || !container.parentNode) return;
-  
-  const snowflake = document.createElement('div');
-  const size = 8 + Math.random() * 12;
-  const startLeft = Math.random() * 100;
-  const duration = 5 + Math.random() * 6;
-  const delay = Math.random() * 2;
-  const swayType = Math.random() > 0.5 ? 'snowSway' : 'snowSwayWide';
-  
-  const isThin = Math.random() > 0.6;
-  const isLarge = Math.random() > 0.85;
-  
-  snowflake.classList.add('snowflake', 'flake');
-  
-  const diag1 = document.createElement('div');
-  diag1.className = 'diagonal1';
-  const diag2 = document.createElement('div');
-  diag2.className = 'diagonal2';
-  const center = document.createElement('div');
-  center.className = 'center';
-  
-  snowflake.appendChild(diag1);
-  snowflake.appendChild(diag2);
-  snowflake.appendChild(center);
-  
-  if (isThin) snowflake.classList.add('thin');
-  if (isLarge) snowflake.classList.add('large');
-  
-  snowflake.style.left = `${startLeft}%`;
-  snowflake.style.width = `${size}px`;
-  snowflake.style.height = `${size}px`;
-  snowflake.style.animation = `snowFall ${duration}s linear ${delay}s forwards, ${swayType} ${duration * 0.8}s ease-in-out ${delay}s infinite`;
-  
-  if (isLight) {
-    snowflake.style.opacity = 0.5 + Math.random() * 0.3;
-  } else {
-    snowflake.style.opacity = 0.6 + Math.random() * 0.4;
-  }
-  
-  container.appendChild(snowflake);
-  winterSnowflakes.push(snowflake);
-  
-  setTimeout(() => {
-    if (snowflake.parentNode) {
-      snowflake.remove();
-    }
-    winterSnowflakes = winterSnowflakes.filter(s => s !== snowflake);
-  }, (duration + delay) * 1000);
-}
-
-// ============ UI FUNCTIONS ============
 
 function applyFontToPopup(fontFamily) {
   document.body.style.fontFamily = fontFamily;
@@ -1345,8 +1167,7 @@ function resetToDefaultSettings() {
     isLocked: false,
     youtubeCollapsed: false,
     blockCollapsed: false,
-    hotkeys: [],
-    particlesEnabled: false
+    hotkeys: []
   };
   
   storage.sync.clear(() => {
@@ -1543,13 +1364,10 @@ function setupSettingsModal() {
   
   if (particleToggle) {
     particleToggle.addEventListener('change', () => {
-      const isEnabled = particleToggle.checked;
-      storage.sync.set({ particlesEnabled: isEnabled });
-      
+      storage.sync.set({ particlesEnabled: particleToggle.checked });
       const currentPreset = document.body.classList.contains('theme-sakura') ? 'sakura' : 
                            document.body.classList.contains('theme-winter') ? 'winter' : '';
-      
-      if (isEnabled) {
+      if (particleToggle.checked) {
         if (currentPreset === 'sakura') {
           startSakuraParticles();
         } else if (currentPreset === 'winter') {
@@ -1688,7 +1506,170 @@ function setupSettingsModal() {
   });
 }
 
-// ============ HOTKEY FUNCTIONS ============
+/* ============================================ */
+/* SAKURA PARTICLES */
+/* ============================================ */
+
+let sakuraInterval = null;
+let sakuraPetals = [];
+
+function startSakuraParticles() {
+  if (sakuraInterval) return;
+  
+  const container = document.getElementById('sakuraParticles');
+  if (!container) return;
+  
+  const isLight = document.body.classList.contains('light-theme');
+  
+  sakuraInterval = setInterval(() => {
+    createSakuraPetal(container, isLight);
+  }, 300 + Math.random() * 500);
+  
+  for (let i = 0; i < 5; i++) {
+    setTimeout(() => createSakuraPetal(container, isLight), i * 200);
+  }
+}
+
+function stopSakuraParticles() {
+  if (sakuraInterval) {
+    clearInterval(sakuraInterval);
+    sakuraInterval = null;
+  }
+  const container = document.getElementById('sakuraParticles');
+  if (container) {
+    container.innerHTML = '';
+  }
+  sakuraPetals = [];
+}
+
+function createSakuraPetal(container, isLight) {
+  const petal = document.createElement('div');
+  const size = 6 + Math.random() * 10;
+  const startLeft = Math.random() * 100;
+  const duration = 4 + Math.random() * 5;
+  const delay = Math.random() * 2;
+  const swayType = Math.random() > 0.5 ? 'sakuraSway' : 'sakuraSwayWide';
+  const variant = Math.random();
+  
+  petal.classList.add('sakura-petal');
+  if (isLight) {
+    petal.classList.add('white');
+  } else if (variant > 0.7) {
+    petal.classList.add('dark');
+  }
+  
+  petal.style.left = `${startLeft}%`;
+  petal.style.width = `${size}px`;
+  petal.style.height = `${size}px`;
+  petal.style.animation = `sakuraFall ${duration}s linear ${delay}s forwards, ${swayType} ${duration * 0.8}s ease-in-out ${delay}s infinite`;
+  petal.style.opacity = 0.6 + Math.random() * 0.4;
+  
+  container.appendChild(petal);
+  sakuraPetals.push(petal);
+  
+  setTimeout(() => {
+    if (petal.parentNode) {
+      petal.remove();
+    }
+    sakuraPetals = sakuraPetals.filter(p => p !== petal);
+  }, (duration + delay) * 1000);
+}
+
+/* ============================================ */
+/* WINTER SNOWFLAKE PARTICLES                   */
+/* ============================================ */
+
+let winterInterval = null;
+let winterSnowflakes = [];
+
+function startWinterParticles() {
+  if (winterInterval) return;
+  
+  const container = document.getElementById('winterParticles');
+  if (!container) return;
+  
+  const isLight = document.body.classList.contains('light-theme');
+  
+  winterInterval = setInterval(() => {
+    createSnowflake(container, isLight);
+  }, 200 + Math.random() * 400);
+  
+  for (let i = 0; i < 8; i++) {
+    setTimeout(() => createSnowflake(container, isLight), i * 150);
+  }
+}
+
+function stopWinterParticles() {
+  if (winterInterval) {
+    clearInterval(winterInterval);
+    winterInterval = null;
+  }
+  const container = document.getElementById('winterParticles');
+  if (container) {
+    container.innerHTML = '';
+  }
+  winterSnowflakes = [];
+}
+
+function createSnowflake(container, isLight) {
+  const snowflake = document.createElement('div');
+  const size = 8 + Math.random() * 12;
+  const startLeft = Math.random() * 100;
+  const duration = 5 + Math.random() * 6;
+  const delay = Math.random() * 2;
+  const swayType = Math.random() > 0.5 ? 'snowSway' : 'snowSwayWide';
+  
+  // Only flakes now (no dots)
+  const isThin = Math.random() > 0.6;  // 40% chance for thinner snowflakes
+  const isLarge = Math.random() > 0.85; // 15% chance for larger snowflakes
+  
+  snowflake.classList.add('snowflake', 'flake');
+  
+  // Add the diagonal arms
+  const diag1 = document.createElement('div');
+  diag1.className = 'diagonal1';
+  const diag2 = document.createElement('div');
+  diag2.className = 'diagonal2';
+  const center = document.createElement('div');
+  center.className = 'center';
+  
+  snowflake.appendChild(diag1);
+  snowflake.appendChild(diag2);
+  snowflake.appendChild(center);
+  
+  if (isThin) {
+    snowflake.classList.add('thin');
+  }
+  if (isLarge) {
+    snowflake.classList.add('large');
+  }
+  
+  snowflake.style.left = `${startLeft}%`;
+  snowflake.style.width = `${size}px`;
+  snowflake.style.height = `${size}px`;
+  snowflake.style.animation = `snowFall ${duration}s linear ${delay}s forwards, ${swayType} ${duration * 0.8}s ease-in-out ${delay}s infinite`;
+  
+  // Set opacity based on theme
+  if (isLight) {
+    snowflake.style.opacity = 0.5 + Math.random() * 0.3;
+  } else {
+    snowflake.style.opacity = 0.6 + Math.random() * 0.4;
+  }
+  
+  container.appendChild(snowflake);
+  winterSnowflakes.push(snowflake);
+  
+  setTimeout(() => {
+    if (snowflake.parentNode) {
+      snowflake.remove();
+    }
+    winterSnowflakes = winterSnowflakes.filter(s => s !== snowflake);
+  }, (duration + delay) * 1000);
+}
+
+/* ============================================ */
+/* HOTKEY FUNCTIONS */
+/* ============================================ */
 
 function saveHotkeyMapping() {
   const urlInput = document.getElementById('hotkeyUrl');

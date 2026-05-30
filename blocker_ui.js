@@ -119,25 +119,25 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Chime Sound ---
-    function playChime() {
+    function playChime(frequency = 392) {
         const audioContext = new (window.AudioContext || window.webkitAudioContext)();
         
-        // Create a soft ding sound
+        // Create a chime with specified frequency
         const oscillator = audioContext.createOscillator();
         const gainNode = audioContext.createGain();
         
         oscillator.connect(gainNode);
         gainNode.connect(audioContext.destination);
         
-        oscillator.frequency.value = 1200; // Higher pitch
+        oscillator.frequency.value = frequency;
         oscillator.type = 'sine';
         
         gainNode.gain.setValueAtTime(0, audioContext.currentTime);
-        gainNode.gain.linearRampToValueAtTime(0.2, audioContext.currentTime + 0.02);
-        gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.5);
+        gainNode.gain.linearRampToValueAtTime(0.2, audioContext.currentTime + 0.05);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.6);
         
         oscillator.start(audioContext.currentTime);
-        oscillator.stop(audioContext.currentTime + 0.5);
+        oscillator.stop(audioContext.currentTime + 0.6);
     }
 
     // --- IndexedDB Management ---
@@ -423,6 +423,15 @@ document.addEventListener('DOMContentLoaded', () => {
         isRunning = true;
         startBtn.textContent = 'pause';
         updateDisplay();
+        
+        // Play chime based on mode when starting
+        const activeMode = document.querySelector('.mode-btn.active').dataset.mode;
+        if (activeMode === 'pomodoro') {
+            playChime(523.25); // C5 for pomodoro
+        } else {
+            playChime(392); // G4 for break
+        }
+        
         timerId = setInterval(() => {
             if (timeLeft > 0) {
                 timeLeft--;
@@ -503,6 +512,275 @@ document.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => settingsModal.style.display = 'none', 300);
         }
     };
+
+    // --- Spotify URL Handler ---
+    const spotifyUrlInput = document.getElementById('spotify-url-input');
+    const loadSpotifyBtn = document.getElementById('load-spotify-btn');
+    const clearSpotifyBtn = document.getElementById('clear-spotify-btn');
+    const spotifyIframe = document.getElementById('spotify-iframe');
+    const spotifyError = document.getElementById('spotify-error');
+    const spotifyLoading = document.getElementById('spotify-loading');
+    const spotifyHistoryToggle = document.getElementById('spotify-history-toggle');
+    const spotifyHistoryDropdown = document.getElementById('spotify-history-dropdown');
+    const spotifyHistoryList = document.getElementById('spotify-history-list');
+    const clearHistoryBtn = document.getElementById('clear-history-btn');
+    const spotifyCollapseBtn = document.getElementById('spotify-collapse-btn');
+    const spotifyControlsWrapper = document.querySelector('.spotify-controls-wrapper');
+    const collapseIconUp = document.querySelector('.collapse-icon-up');
+    const collapseIconDown = document.querySelector('.collapse-icon-down');
+
+    // URL History Management
+    const SPOTIFY_HISTORY_KEY = 'spotifyUrlHistory';
+    const MAX_HISTORY_ITEMS = 10;
+
+    function getSpotifyHistory() {
+        try {
+            return JSON.parse(localStorage.getItem(SPOTIFY_HISTORY_KEY)) || [];
+        } catch {
+            return [];
+        }
+    }
+
+    function saveSpotifyHistory(url) {
+        let history = getSpotifyHistory();
+        // Remove if already exists (to move to top)
+        history = history.filter(item => item.url !== url);
+        // Add new item to top
+        history.unshift({ url, timestamp: Date.now() });
+        // Keep only last MAX_HISTORY_ITEMS
+        history = history.slice(0, MAX_HISTORY_ITEMS);
+        localStorage.setItem(SPOTIFY_HISTORY_KEY, JSON.stringify(history));
+        renderSpotifyHistory();
+    }
+
+    function clearSpotifyHistory() {
+        localStorage.removeItem(SPOTIFY_HISTORY_KEY);
+        renderSpotifyHistory();
+    }
+
+    function renderSpotifyHistory() {
+        const history = getSpotifyHistory();
+        spotifyHistoryList.innerHTML = '';
+        
+        if (history.length === 0) {
+            spotifyHistoryList.innerHTML = '<div class="history-empty">No recent URLs</div>';
+            return;
+        }
+
+        history.forEach((item, index) => {
+            const historyItem = document.createElement('div');
+            historyItem.className = 'history-item';
+            historyItem.innerHTML = `
+                <span class="history-url">${escapeHtml(item.url)}</span>
+                <button class="history-load-btn" data-url="${escapeHtml(item.url)}" title="Load this URL">Load</button>
+                <button class="history-delete-btn" data-index="${index}" title="Remove">×</button>
+            `;
+            spotifyHistoryList.appendChild(historyItem);
+        });
+
+        // Add event listeners to history items
+        spotifyHistoryList.querySelectorAll('.history-load-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                spotifyUrlInput.value = btn.dataset.url;
+                loadSpotifyUrl(btn.dataset.url);
+            });
+        });
+
+        spotifyHistoryList.querySelectorAll('.history-delete-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const history = getSpotifyHistory();
+                history.splice(parseInt(btn.dataset.index), 1);
+                localStorage.setItem(SPOTIFY_HISTORY_KEY, JSON.stringify(history));
+                renderSpotifyHistory();
+            });
+        });
+    }
+
+    // URL Validation
+    function validateSpotifyUrl(url) {
+        if (!url) return { valid: false, error: 'Please enter a Spotify URL' };
+        
+        const patterns = [
+            /^https?:\/\/(open\.)?spotify\.com\/track\/[a-zA-Z0-9]+/,
+            /^https?:\/\/(open\.)?spotify\.com\/playlist\/[a-zA-Z0-9]+/,
+            /^https?:\/\/(open\.)?spotify\.com\/album\/[a-zA-Z0-9]+/,
+            /^https?:\/\/(open\.)?spotify\.com\/artist\/[a-zA-Z0-9]+/,
+            /^https?:\/\/(open\.)?spotify\.com\/episode\/[a-zA-Z0-9]+/,
+            /^https?:\/\/(open\.)?spotify\.com\/show\/[a-zA-Z0-9]+/,
+            /^[a-zA-Z0-9]{22}$/ // Direct ID
+        ];
+
+        for (const pattern of patterns) {
+            if (pattern.test(url)) {
+                return { valid: true };
+            }
+        }
+
+        return { valid: false, error: 'Invalid Spotify URL. Please enter a valid track, playlist, album, artist, podcast, or show URL.' };
+    }
+
+    // Extract Spotify ID and type from URL
+    function extractSpotifyInfo(url) {
+        let type = 'track';
+        let id = '';
+
+        if (url.includes('open.spotify.com/track/')) {
+            type = 'track';
+            id = url.split('track/')[1].split('?')[0];
+        } else if (url.includes('open.spotify.com/playlist/')) {
+            type = 'playlist';
+            id = url.split('playlist/')[1].split('?')[0];
+        } else if (url.includes('open.spotify.com/album/')) {
+            type = 'album';
+            id = url.split('album/')[1].split('?')[0];
+        } else if (url.includes('open.spotify.com/artist/')) {
+            type = 'artist';
+            id = url.split('artist/')[1].split('?')[0];
+        } else if (url.includes('open.spotify.com/episode/')) {
+            type = 'episode';
+            id = url.split('episode/')[1].split('?')[0];
+        } else if (url.includes('open.spotify.com/show/')) {
+            type = 'show';
+            id = url.split('show/')[1].split('?')[0];
+        } else if (/^[a-zA-Z0-9]{22}$/.test(url)) {
+            // Direct ID - assume track
+            id = url;
+        } else {
+            // Try to extract from any URL format
+            const match = url.match(/spotify\.com\/([^\/]+)\/([a-zA-Z0-9]+)/);
+            if (match) {
+                type = match[1];
+                id = match[2];
+            }
+        }
+
+        return { type, id };
+    }
+
+    // Load Spotify URL
+    function loadSpotifyUrl(url) {
+        const validation = validateSpotifyUrl(url);
+        
+        if (!validation.valid) {
+            spotifyError.textContent = validation.error;
+            spotifyError.style.display = 'block';
+            return;
+        }
+
+        spotifyError.style.display = 'none';
+        spotifyLoading.style.display = 'flex';
+        loadSpotifyBtn.disabled = true;
+
+        const { type, id } = extractSpotifyInfo(url);
+        
+        // Update iframe
+        spotifyIframe.src = `https://open.spotify.com/embed/${type}/${id}?theme=0`;
+        
+        // Save to history
+        saveSpotifyHistory(url);
+
+        // Hide loading after a short delay
+        setTimeout(() => {
+            spotifyLoading.style.display = 'none';
+            loadSpotifyBtn.disabled = false;
+        }, 1000);
+    }
+
+    // Collapse/Expand functionality
+    function toggleSpotifyControls() {
+        const isCollapsed = spotifyControlsWrapper.classList.toggle('collapsed');
+        
+        // Toggle icons - when collapsed show up, when expanded show down
+        if (isCollapsed) {
+            collapseIconUp.style.display = 'block';
+            collapseIconDown.style.display = 'none';
+            // Position button above iframe when collapsed
+            spotifyCollapseBtn.style.position = 'relative';
+            spotifyCollapseBtn.style.top = 'auto';
+            spotifyCollapseBtn.style.right = 'auto';
+            spotifyCollapseBtn.style.marginBottom = '8px';
+            spotifyCollapseBtn.style.marginLeft = 'auto';
+            spotifyCollapseBtn.style.alignSelf = 'flex-end';
+        } else {
+            collapseIconUp.style.display = 'none';
+            collapseIconDown.style.display = 'block';
+            // Position button in top right when expanded
+            spotifyCollapseBtn.style.position = 'absolute';
+            spotifyCollapseBtn.style.top = '8px';
+            spotifyCollapseBtn.style.right = '8px';
+            spotifyCollapseBtn.style.marginBottom = '0';
+            spotifyCollapseBtn.style.marginLeft = '0';
+            spotifyCollapseBtn.style.alignSelf = 'auto';
+        }
+    }
+    
+    // Always start collapsed
+    if (spotifyCollapseBtn && spotifyControlsWrapper) {
+        spotifyControlsWrapper.classList.add('collapsed');
+        collapseIconUp.style.display = 'block';
+        collapseIconDown.style.display = 'none';
+        // Position button above iframe when collapsed
+        spotifyCollapseBtn.style.position = 'relative';
+        spotifyCollapseBtn.style.top = 'auto';
+        spotifyCollapseBtn.style.right = 'auto';
+        spotifyCollapseBtn.style.marginBottom = '8px';
+        spotifyCollapseBtn.style.marginLeft = 'auto';
+        spotifyCollapseBtn.style.alignSelf = 'flex-end';
+        
+        spotifyCollapseBtn.addEventListener('click', toggleSpotifyControls);
+    }
+
+    // Event Listeners
+    if (loadSpotifyBtn && spotifyUrlInput && spotifyIframe) {
+        loadSpotifyBtn.addEventListener('click', () => {
+            const url = spotifyUrlInput.value.trim();
+            if (url) {
+                loadSpotifyUrl(url);
+            }
+        });
+
+        // Allow pressing Enter to load
+        spotifyUrlInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                loadSpotifyBtn.click();
+            }
+        });
+
+        // Clear button
+        if (clearSpotifyBtn) {
+            clearSpotifyBtn.addEventListener('click', () => {
+                spotifyUrlInput.value = '';
+                spotifyError.style.display = 'none';
+                spotifyUrlInput.focus();
+            });
+        }
+
+        // History toggle
+        if (spotifyHistoryToggle) {
+            spotifyHistoryToggle.addEventListener('click', () => {
+                const isHidden = spotifyHistoryDropdown.style.display === 'none';
+                spotifyHistoryDropdown.style.display = isHidden ? 'block' : 'none';
+                if (isHidden) {
+                    renderSpotifyHistory();
+                }
+            });
+        }
+
+        // Clear history
+        if (clearHistoryBtn) {
+            clearHistoryBtn.addEventListener('click', clearSpotifyHistory);
+        }
+
+        // Close history dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.spotify-history-container')) {
+                spotifyHistoryDropdown.style.display = 'none';
+            }
+        });
+
+        // Initialize history on load
+        renderSpotifyHistory();
+    }
     
     timerSettingsBtn.onclick = () => {
         timerSettingsModal.style.display = 'flex';
@@ -638,12 +916,41 @@ document.addEventListener('DOMContentLoaded', () => {
     dots.forEach(dot => {
         dot.addEventListener('click', () => {
             const target = dot.dataset.target;
+            const currentActiveTab = document.querySelector('.music-tab.active');
+            const targetTab = document.querySelector(`.music-tab[data-tab="${target}"]`);
 
-            tabs.forEach(tab => tab.classList.remove('active'));
-            dots.forEach(d => d.classList.remove('active'));
+            // If clicking the same tab, do nothing
+            if (currentActiveTab === targetTab) return;
 
-            document.querySelector(`.music-tab[data-tab="${target}"]`).classList.add('active');
-            dot.classList.add('active');
+            // Determine direction
+            const currentTabNum = parseInt(currentActiveTab?.dataset.tab);
+            const targetTabNum = parseInt(target);
+            const isForward = targetTabNum > currentTabNum;
+
+            // Animate out current tab
+            if (currentActiveTab) {
+                currentActiveTab.style.opacity = '0';
+                currentActiveTab.style.transform = isForward ? 'translateX(-20px)' : 'translateX(20px)';
+            }
+
+            // Wait for animation to complete, then switch tabs and animate in
+            setTimeout(() => {
+                tabs.forEach(tab => {
+                    tab.classList.remove('active');
+                    tab.style.opacity = '0';
+                    tab.style.transform = isForward ? 'translateX(20px)' : 'translateX(-20px)';
+                });
+                dots.forEach(d => d.classList.remove('active'));
+
+                targetTab.classList.add('active');
+                dot.classList.add('active');
+
+                // Animate in new tab
+                setTimeout(() => {
+                    targetTab.style.opacity = '1';
+                    targetTab.style.transform = 'translateX(0)';
+                }, 50);
+            }, 300);
         });
     });
 
@@ -811,10 +1118,46 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Browser Shortcuts Logic ---
     const shortcutModal = document.getElementById('shortcut-modal');
     const shortcutUrlInput = document.getElementById('shortcut-url');
+    const clearShortcutUrlBtn = document.getElementById('clear-shortcut-url-btn');
     const saveShortcutBtn = document.getElementById('save-shortcut-btn');
     const cancelShortcutBtn = document.getElementById('cancel-shortcut-btn');
     let currentShortcutIndex = null;
-    const browserShortcuts = JSON.parse(localStorage.getItem('browserShortcuts')) || [null, null, null, null];
+    const browserShortcuts = JSON.parse(localStorage.getItem('browserShortcuts')) || [
+        { url: 'https://www.youtube.com' },
+        { url: 'https://www.wikipedia.org' },
+        null,
+        null
+    ];
+
+    // Tooltip Logic - Show once, never show again after closing
+    const shortcutTooltip = document.getElementById('shortcut-tooltip');
+    const tooltipCloseBtn = document.getElementById('tooltip-close-btn');
+    const TOOLTIP_CLOSED_KEY = 'shortcutTooltipClosed';
+
+    function showTooltipOnce() {
+        const hasBeenClosed = localStorage.getItem(TOOLTIP_CLOSED_KEY) === 'true';
+        if (!hasBeenClosed && shortcutTooltip) {
+            shortcutTooltip.classList.add('visible');
+        }
+    }
+
+    function closeTooltipPermanently() {
+        if (shortcutTooltip) {
+            shortcutTooltip.classList.remove('visible');
+            localStorage.setItem(TOOLTIP_CLOSED_KEY, 'true');
+        }
+    }
+
+    // Close button functionality
+    if (tooltipCloseBtn) {
+        tooltipCloseBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            closeTooltipPermanently();
+        });
+    }
+
+    // Show tooltip after a short delay
+    setTimeout(showTooltipOnce, 1000);
 
     // --- Music Search Logic ---
     const searchMusicBtn = document.getElementById('search-music-btn');
@@ -948,6 +1291,11 @@ document.addEventListener('DOMContentLoaded', () => {
             browserShortcuts[currentShortcutIndex] = { url: normalizedUrl };
             localStorage.setItem('browserShortcuts', JSON.stringify(browserShortcuts));
             updateShortcutIcon(currentShortcutIndex, normalizedUrl);
+        } else {
+            // Clear shortcut if URL is empty
+            browserShortcuts[currentShortcutIndex] = null;
+            localStorage.setItem('browserShortcuts', JSON.stringify(browserShortcuts));
+            updateShortcutIcon(currentShortcutIndex, null);
         }
         shortcutModal.classList.remove('show');
         setTimeout(() => shortcutModal.style.display = 'none', 300);
@@ -962,6 +1310,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 browserShortcuts[currentShortcutIndex] = { url: normalizedUrl };
                 localStorage.setItem('browserShortcuts', JSON.stringify(browserShortcuts));
                 updateShortcutIcon(currentShortcutIndex, normalizedUrl);
+            } else {
+                // Clear shortcut if URL is empty
+                browserShortcuts[currentShortcutIndex] = null;
+                localStorage.setItem('browserShortcuts', JSON.stringify(browserShortcuts));
+                updateShortcutIcon(currentShortcutIndex, null);
             }
             shortcutModal.classList.remove('show');
             setTimeout(() => shortcutModal.style.display = 'none', 300);
@@ -973,6 +1326,18 @@ document.addEventListener('DOMContentLoaded', () => {
         shortcutModal.classList.remove('show');
         setTimeout(() => shortcutModal.style.display = 'none', 300);
     });
+
+    // Clear shortcut button
+    if (clearShortcutUrlBtn) {
+        clearShortcutUrlBtn.addEventListener('click', () => {
+            shortcutUrlInput.value = '';
+            browserShortcuts[currentShortcutIndex] = null;
+            localStorage.setItem('browserShortcuts', JSON.stringify(browserShortcuts));
+            updateShortcutIcon(currentShortcutIndex, null);
+            shortcutModal.classList.remove('show');
+            setTimeout(() => shortcutModal.style.display = 'none', 300);
+        });
+    }
 
     // Close modal when clicking outside
     shortcutModal.onclick = (e) => {
@@ -1144,8 +1509,18 @@ document.addEventListener('DOMContentLoaded', () => {
                                     updateDisplay();
                                 }
                             });
-                            setTimeout(updateModeIndicator, 100);
+                        } else {
+                            // If no saved mode, default to pomodoro
+                            modeBtns.forEach(btn => {
+                                btn.classList.remove('active');
+                                if (btn.dataset.mode === 'pomodoro') {
+                                    btn.classList.add('active');
+                                    timeLeft = parseInt(btn.dataset.time);
+                                    updateDisplay();
+                                }
+                            });
                         }
+                        setTimeout(updateModeIndicator, 100);
                     }, 50);
                 }, 500);
             }

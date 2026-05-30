@@ -143,7 +143,7 @@ async function takeVisibleScreenshot(tabId) {
   }
 }
 
-// Take full page screenshot using debugger API
+// Take full page screenshot using debugger API - FIXED VERSION
 async function takeFullPageScreenshot(tabId) {
   console.log("Taking full page screenshot of tab:", tabId);
   
@@ -155,49 +155,87 @@ async function takeFullPageScreenshot(tabId) {
       return;
     }
     
+    // First, inject a script to get the full page dimensions
+    const [result] = await chrome.scripting.executeScript({
+      target: { tabId: tabId },
+      func: () => {
+        // Get the full page dimensions
+        const getFullPageDimensions = () => {
+          const scrollWidth = Math.max(
+            document.body.scrollWidth,
+            document.documentElement.scrollWidth,
+            document.body.offsetWidth,
+            document.documentElement.offsetWidth,
+            document.body.clientWidth,
+            document.documentElement.clientWidth
+          );
+          
+          const scrollHeight = Math.max(
+            document.body.scrollHeight,
+            document.documentElement.scrollHeight,
+            document.body.offsetHeight,
+            document.documentElement.offsetHeight,
+            document.body.clientHeight,
+            document.documentElement.clientHeight
+          );
+          
+          return { width: scrollWidth, height: scrollHeight };
+        };
+        
+        return getFullPageDimensions();
+      }
+    });
+    
+    const scrollWidth = Math.ceil(result.result.width);
+    const scrollHeight = Math.ceil(result.result.height);
+    
+    console.log(`Page size: ${scrollWidth} x ${scrollHeight}`);
+    
+    // Limit maximum size to prevent memory issues (max 10000x10000)
+    const MAX_DIMENSION = 10000;
+    if (scrollWidth > MAX_DIMENSION || scrollHeight > MAX_DIMENSION) {
+      console.warn(`Page too large (${scrollWidth}x${scrollHeight}), limiting to ${MAX_DIMENSION}x${MAX_DIMENSION}`);
+    }
+    
     // Attach debugger to the tab
     await chrome.debugger.attach({ tabId: tabId }, "1.3");
     console.log("Debugger attached to tab:", tabId);
     
-    // Get document height and width
-    const metrics = await chrome.debugger.sendCommand({ tabId: tabId }, "Page.getLayoutMetrics");
+    // Enable the Page domain
+    await chrome.debugger.sendCommand({ tabId: tabId }, "Page.enable");
     
-    // Get the content size
-    const contentSize = metrics.cssContentSize || metrics.contentSize;
-    const scrollWidth = Math.ceil(contentSize.width);
-    const scrollHeight = Math.ceil(contentSize.height);
+    // Get device pixel ratio
+    const devicePixelRatioResult = await chrome.debugger.sendCommand({ tabId: tabId }, "Runtime.evaluate", {
+      expression: "window.devicePixelRatio",
+      returnByValue: true
+    });
+    const devicePixelRatio = devicePixelRatioResult.result.value || 1;
     
-    console.log(`Page size: ${scrollWidth} x ${scrollHeight}`);
-    
-    // Set device metrics to capture full page
+    // Override device metrics to capture full page
     await chrome.debugger.sendCommand({ tabId: tabId }, "Emulation.setDeviceMetricsOverride", {
-      width: scrollWidth,
-      height: scrollHeight,
-      deviceScaleFactor: 1,
+      width: Math.min(scrollWidth, MAX_DIMENSION),
+      height: Math.min(scrollHeight, MAX_DIMENSION),
+      deviceScaleFactor: devicePixelRatio,
       mobile: false,
       fitWindow: false
     });
     
-    // Set viewport to cover entire page
-    await chrome.debugger.sendCommand({ tabId: tabId }, "Emulation.setVisibleSize", {
-      width: scrollWidth,
-      height: scrollHeight
+    // Scroll to top
+    await chrome.debugger.sendCommand({ tabId: tabId }, "Runtime.evaluate", {
+      expression: "window.scrollTo(0, 0)"
     });
+    
+    // Wait a bit for any lazy-loaded content
+    await new Promise(resolve => setTimeout(resolve, 200));
     
     // Capture screenshot
     const screenshot = await chrome.debugger.sendCommand({ tabId: tabId }, "Page.captureScreenshot", {
       format: "png",
       captureBeyondViewport: true,
-      clip: {
-        x: 0,
-        y: 0,
-        width: scrollWidth,
-        height: scrollHeight,
-        scale: 1
-      }
+      fromSurface: true
     });
     
-    // Restore device metrics (clear overrides)
+    // Clear device metrics override
     await chrome.debugger.sendCommand({ tabId: tabId }, "Emulation.clearDeviceMetricsOverride");
     
     // Detach debugger
@@ -232,6 +270,76 @@ async function takeFullPageScreenshot(tabId) {
     } catch (detachError) {
       console.error('Error detaching debugger:', detachError);
     }
+    
+    // Fallback: try using chrome.tabs.captureVisibleTab with scrolling
+    console.log("Attempting fallback screenshot method...");
+    try {
+      await takeFullPageScreenshotFallback(tabId);
+    } catch (fallbackError) {
+      console.error('Fallback screenshot also failed:', fallbackError);
+    }
+  }
+}
+
+// Fallback method for full page screenshot using visible area capture and stitching
+async function takeFullPageScreenshotFallback(tabId) {
+  try {
+    // Inject script to get page height and scroll
+    const [heightResult] = await chrome.scripting.executeScript({
+      target: { tabId: tabId },
+      func: () => {
+        return {
+          height: Math.max(
+            document.body.scrollHeight,
+            document.documentElement.scrollHeight
+          ),
+          viewportHeight: window.innerHeight
+        };
+      }
+    });
+    
+    const pageHeight = heightResult.result.height;
+    const viewportHeight = heightResult.result.viewportHeight;
+    const numCaptures = Math.ceil(pageHeight / viewportHeight);
+    
+    console.log(`Fallback: Capturing ${numCaptures} segments`);
+    
+    // Capture each segment
+    const segments = [];
+    for (let i = 0; i < numCaptures; i++) {
+      const scrollY = i * viewportHeight;
+      
+      // Scroll to position
+      await chrome.scripting.executeScript({
+        target: { tabId: tabId },
+        func: (y) => window.scrollTo(0, y),
+        args: [scrollY]
+      });
+      
+      // Wait for any lazy loading
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      // Capture visible area
+      const tab = await chrome.tabs.get(tabId);
+      const screenshotDataUrl = await chrome.tabs.captureVisibleTab(
+        tab.windowId,
+        { format: "png" }
+      );
+      
+      segments.push(screenshotDataUrl);
+    }
+    
+    // Scroll back to top
+    await chrome.scripting.executeScript({
+      target: { tabId: tabId },
+      func: () => window.scrollTo(0, 0)
+    });
+    
+    console.log(`Captured ${segments.length} segments, but stitching requires canvas API which is limited in background script`);
+    console.log("Fallback: Consider using the primary method or a dedicated screenshot extension for very long pages");
+    
+  } catch (error) {
+    console.error('Fallback screenshot failed:', error);
   }
 }
 
