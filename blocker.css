@@ -20,7 +20,7 @@ body {
     flex-direction: column;
     justify-content: center;
     align-items: center;
-    color: #3a3a3a;
+    color: #ffffff;
     background: var(--bg-overlay);
     background-size: cover;
     background-position: center;
