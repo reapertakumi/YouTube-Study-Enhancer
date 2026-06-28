@@ -422,9 +422,17 @@ function handleComments() {
   let comments = document.querySelector("#comments");
   if (!comments) comments = document.querySelector("ytd-comments#comments");
   if (!comments) comments = document.querySelector("ytd-comments");
-  if (!comments) return;
-  
-  comments.style.display = settings.comments ? "none" : "";
+  if (comments) {
+    comments.style.display = settings.comments ? "none" : "";
+  }
+
+  // Hide comments button on YouTube Shorts
+  if (window.location.pathname.includes('/shorts/')) {
+    const commentsButton = document.querySelector('.ytSpecButtonViewModelHost.ytwReelActionBarViewModelHostDesktopActionButton');
+    if (commentsButton) {
+      commentsButton.style.display = settings.comments ? "none" : "";
+    }
+  }
 }
 
 // ============ SPEED BLOCK WITH IMPROVED CLEANUP (Fix #2 & #7) ============

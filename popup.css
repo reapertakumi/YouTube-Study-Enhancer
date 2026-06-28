@@ -302,78 +302,95 @@ body.light-theme .settings-font-select option {
 
 /* Default Dark Theme Scrollbar */
 ::-webkit-scrollbar {
-  width: 4px;
+  width: 0px;
+  display: none;
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 4px;
+  background: transparent;
+  display: none;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #3a3a3a;
-  border-radius: 4px;
+  background: transparent;
+  display: none;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #555555;
+  background: transparent;
+  display: none;
 }
 
 /* Sunset/Sunrise Dark Mode Scrollbar */
 body.theme-sunset::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.3);
+  background: transparent;
+  display: none;
 }
 body.theme-sunset::-webkit-scrollbar-thumb {
-  background: #8b3a1a;
+  background: transparent;
+  display: none;
 }
 body.theme-sunset::-webkit-scrollbar-thumb:hover {
-  background: #cc5522;
+  background: transparent;
+  display: none;
 }
 
 /* Ocean Dark Mode Scrollbar */
 body.theme-ocean::-webkit-scrollbar-track {
-  background: rgba(0, 20, 40, 0.4);
+  background: transparent;
+  display: none;
 }
 body.theme-ocean::-webkit-scrollbar-thumb {
-  background: #005a8c;
+  background: transparent;
+  display: none;
 }
 body.theme-ocean::-webkit-scrollbar-thumb:hover {
-  background: #0088cc;
+  background: transparent;
+  display: none;
 }
 
 /* Sakura Dark Mode Scrollbar */
 body.theme-sakura::-webkit-scrollbar-track {
-  background: rgba(40, 10, 30, 0.4);
+  background: transparent;
+  display: none;
 }
 body.theme-sakura::-webkit-scrollbar-thumb {
-  background: #c2185b;
+  background: transparent;
+  display: none;
 }
 body.theme-sakura::-webkit-scrollbar-thumb:hover {
-  background: #e91e63;
+  background: transparent;
+  display: none;
 }
 
 /* Midnight Dark Mode Scrollbar */
 body.theme-midnight::-webkit-scrollbar-track {
-  background: rgba(30, 10, 50, 0.4);
+  background: transparent;
+  display: none;
 }
 body.theme-midnight::-webkit-scrollbar-thumb {
-  background: #4a2a6a;
+  background: transparent;
+  display: none;
 }
 body.theme-midnight::-webkit-scrollbar-thumb:hover {
-  background: #7b4a9a;
+  background: transparent;
+  display: none;
 }
 
 /* Light Theme Scrollbars - Consistent Gray for all themes */
 body.light-theme ::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.05);
+  background: transparent;
+  display: none;
 }
 
 body.light-theme ::-webkit-scrollbar-thumb {
-  background: #cccccc;
+  background: transparent;
+  display: none;
 }
 
 body.light-theme ::-webkit-scrollbar-thumb:hover {
-  background: #aaaaaa;
+  background: transparent;
+  display: none;
 }
 
 /* Light theme versions for each preset - keep consistent */
@@ -385,7 +402,8 @@ body.light-theme.theme-neon ::-webkit-scrollbar-thumb,
 body.light-theme.theme-retro ::-webkit-scrollbar-thumb,
 body.light-theme.theme-coffee ::-webkit-scrollbar-thumb,
 body.light-theme.theme-winter ::-webkit-scrollbar-thumb {
-  background: #cccccc;
+  background: transparent;
+  display: none;
 }
 
 body.light-theme.theme-sunset ::-webkit-scrollbar-thumb:hover,
@@ -396,7 +414,8 @@ body.light-theme.theme-neon ::-webkit-scrollbar-thumb:hover,
 body.light-theme.theme-retro ::-webkit-scrollbar-thumb:hover,
 body.light-theme.theme-coffee ::-webkit-scrollbar-thumb:hover,
 body.light-theme.theme-winter ::-webkit-scrollbar-thumb:hover {
-  background: #aaaaaa;
+  background: transparent;
+  display: none;
 }
 
 /* App Container */
@@ -2459,13 +2478,16 @@ body.theme-retro .confirm-modal-btn.confirm {
 
 /* Retro Theme Scrollbar */
 body.theme-retro::-webkit-scrollbar-track {
-  background: rgba(0, 20, 0, 0.4);
+  background: transparent;
+  display: none;
 }
 body.theme-retro::-webkit-scrollbar-thumb {
-  background: #33ff33;
+  background: transparent;
+  display: none;
 }
 body.theme-retro::-webkit-scrollbar-thumb:hover {
-  background: #66ff66;
+  background: transparent;
+  display: none;
 }
 
 /* Retro Theme Light Mode - Keep original light version */
@@ -3039,43 +3061,55 @@ body.light-theme.theme-winter .card span {
 
 /* Scrollbar styles for new themes */
 body.theme-neon::-webkit-scrollbar-track {
-  background: rgba(0, 30, 30, 0.4);
+  background: transparent;
+  display: none;
 }
 body.theme-neon::-webkit-scrollbar-thumb {
-  background: #00ffcc;
+  background: transparent;
+  display: none;
 }
 body.theme-neon::-webkit-scrollbar-thumb:hover {
-  background: #00ffaa;
+  background: transparent;
+  display: none;
 }
 
 body.theme-coffee::-webkit-scrollbar-track {
-  background: rgba(40, 20, 10, 0.4);
+  background: transparent;
+  display: none;
 }
 body.theme-coffee::-webkit-scrollbar-thumb {
-  background: #8d6e63;
+  background: transparent;
+  display: none;
 }
 body.theme-coffee::-webkit-scrollbar-thumb:hover {
-  background: #a1887f;
+  background: transparent;
+  display: none;
 }
 
 body.theme-winter::-webkit-scrollbar-track {
-  background: rgba(50, 100, 150, 0.3);
+  background: transparent;
+  display: none;
 }
 body.theme-winter::-webkit-scrollbar-thumb {
-  background: #64b5f6;
+  background: transparent;
+  display: none;
 }
 body.theme-winter::-webkit-scrollbar-thumb:hover {
-  background: #90caf9;
+  background: transparent;
+  display: none;
 }
 
 body.light-theme.theme-winter ::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.05);
+  background: transparent;
+  display: none;
 }
 body.light-theme.theme-winter ::-webkit-scrollbar-thumb {
-  background: #cccccc;
+  background: transparent;
+  display: none;
 }
 body.light-theme.theme-winter ::-webkit-scrollbar-thumb:hover {
-  background: #aaaaaa;
+  background: transparent;
+  display: none;
 }
 
 /* ============================================ */
@@ -3606,17 +3640,20 @@ body.theme-lofi .hotkey-info-card {
 
 /* Scrollbar for LoFi */
 body.theme-lofi::-webkit-scrollbar-track {
-  background: rgba(30, 24, 20, 0.8);
+  background: transparent;
+  display: none;
   border-radius: 4px;
 }
 
 body.theme-lofi::-webkit-scrollbar-thumb {
-  background: #8a6a50;
+  background: transparent;
+  display: none;
   border-radius: 4px;
 }
 
 body.theme-lofi::-webkit-scrollbar-thumb:hover {
-  background: #d4a373;
+  background: transparent;
+  display: none;
 }
 
 /* ============================================ */
@@ -4108,17 +4145,20 @@ body.light-theme.theme-lofi .hotkey-info-card {
 
 /* Scrollbar for Light LoFi */
 body.light-theme.theme-lofi::-webkit-scrollbar-track {
-  background: rgba(160, 120, 80, 0.08);
+  background: transparent;
+  display: none;
   border-radius: 4px;
 }
 
 body.light-theme.theme-lofi::-webkit-scrollbar-thumb {
-  background: #d4c4b0;
+  background: transparent;
+  display: none;
   border-radius: 4px;
 }
 
 body.light-theme.theme-lofi::-webkit-scrollbar-thumb:hover {
-  background: #c89a6a;
+  background: transparent;
+  display: none;
 }
 
 /* ============================================ */

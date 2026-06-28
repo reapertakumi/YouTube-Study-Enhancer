@@ -1,4 +1,4 @@
-const youtubeFeatureIds = ["speed", "sidebar", "comments"];
+const youtubeFeatureIds = ["speed", "sidebar", "comments", "blockShortScroll"];
 const blockIds = ["shorts", "instagram", "twitter", "tiktok", "reddit", "pinterest", "blockYoutube"];
 const allIds = [...youtubeFeatureIds, ...blockIds];
 
@@ -1037,15 +1037,12 @@ function openSettingsModal() {
     settingsModal.style.display = 'flex';
     settingsModalOpen = true;
     loadSettingsModalValues();
+    // Use hardcoded values from debug output for initial positioning
     requestAnimationFrame(() => {
       const tabUnderline = document.querySelector('.settings-tab-underline');
-      const activeBtn = document.querySelector('.settings-tab-btn.active');
-      if (tabUnderline && activeBtn) {
-        const activeSpan = activeBtn.querySelector('span');
-        const barRect = activeBtn.parentElement.getBoundingClientRect();
-        const spanRect = activeSpan.getBoundingClientRect();
-        tabUnderline.style.width = `${spanRect.width}px`;
-        tabUnderline.style.left = `${spanRect.left - barRect.left}px`;
+      if (tabUnderline) {
+        tabUnderline.style.width = '45.46875px';
+        tabUnderline.style.left = '20px';
       }
     });
   }
@@ -1455,8 +1452,10 @@ function setupSettingsModal() {
     if (!activeSpan) return;
     const barRect = activeBtn.parentElement.getBoundingClientRect();
     const spanRect = activeSpan.getBoundingClientRect();
-    tabUnderline.style.width = `${spanRect.width}px`;
-    tabUnderline.style.left = `${spanRect.left - barRect.left}px`;
+    const width = spanRect.width;
+    const left = spanRect.left - barRect.left;
+    tabUnderline.style.width = `${width}px`;
+    tabUnderline.style.left = `${left}px`;
   };
 
   tabBtns.forEach(btn => {
