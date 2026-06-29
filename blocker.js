@@ -92,21 +92,23 @@
             }
           }
 
-          // Block mouse wheel scrolling
-          document.addEventListener('wheel', preventScroll, { passive: false });
-          document.addEventListener('mousewheel', preventScroll, { passive: false });
+          // Get the shorts container
+          const shortsContainer = document.querySelector('ytd-reel-video-renderer') || document.querySelector('#shorts-container') || document.body;
 
-          // Block touch scrolling
-          document.addEventListener('touchstart', preventScroll, { passive: false });
-          document.addEventListener('touchmove', preventScroll, { passive: false });
-          document.addEventListener('touchend', preventScroll, { passive: false });
+          // Block mouse wheel scrolling on shorts container
+          shortsContainer.addEventListener('wheel', preventScroll, { passive: false });
+          shortsContainer.addEventListener('mousewheel', preventScroll, { passive: false });
 
-          // Block keyboard navigation
-          document.addEventListener('keydown', preventKeyScroll, { capture: true });
+          // Block touch scrolling on shorts container
+          shortsContainer.addEventListener('touchstart', preventScroll, { passive: false });
+          shortsContainer.addEventListener('touchmove', preventScroll, { passive: false });
+          shortsContainer.addEventListener('touchend', preventScroll, { passive: false });
+
+          // Block keyboard navigation on shorts container
+          shortsContainer.addEventListener('keydown', preventKeyScroll, { capture: true });
 
           // Block swipe gestures on the shorts container
-          const shortsContainer = document.querySelector('ytd-reel-video-renderer') || document.querySelector('#shorts-container');
-          if (shortsContainer) {
+          if (shortsContainer !== document.body) {
             shortsContainer.style.overflow = 'hidden';
             shortsContainer.style.touchAction = 'none';
           }
@@ -129,32 +131,34 @@
           window._blockShortScroll = {
             preventScroll,
             preventKeyScroll,
-            hideNavigationInterval
+            hideNavigationInterval,
+            shortsContainer
           };
         } else {
           // Cleanup if feature is disabled
           if (window._blockShortScroll) {
-            const { preventScroll, preventKeyScroll, hideNavigationInterval } = window._blockShortScroll;
+            const { preventScroll, preventKeyScroll, hideNavigationInterval, shortsContainer } = window._blockShortScroll;
 
-            // Remove event listeners
-            document.removeEventListener('wheel', preventScroll);
-            document.removeEventListener('mousewheel', preventScroll);
-            document.removeEventListener('touchstart', preventScroll);
-            document.removeEventListener('touchmove', preventScroll);
-            document.removeEventListener('touchend', preventScroll);
-            document.removeEventListener('keydown', preventKeyScroll, { capture: true });
+            // Remove event listeners from shorts container
+            if (shortsContainer) {
+              shortsContainer.removeEventListener('wheel', preventScroll);
+              shortsContainer.removeEventListener('mousewheel', preventScroll);
+              shortsContainer.removeEventListener('touchstart', preventScroll);
+              shortsContainer.removeEventListener('touchmove', preventScroll);
+              shortsContainer.removeEventListener('touchend', preventScroll);
+              shortsContainer.removeEventListener('keydown', preventKeyScroll, { capture: true });
+
+              // Restore shorts container styles
+              if (shortsContainer !== document.body) {
+                shortsContainer.style.overflow = '';
+                shortsContainer.style.touchAction = '';
+              }
+            }
 
             // Clear interval
             clearInterval(hideNavigationInterval);
 
             window._blockShortScroll = null;
-          }
-
-          // Restore shorts container styles
-          const shortsContainer = document.querySelector('ytd-reel-video-renderer') || document.querySelector('#shorts-container');
-          if (shortsContainer) {
-            shortsContainer.style.overflow = '';
-            shortsContainer.style.touchAction = '';
           }
 
           // Show the navigation container again
@@ -164,6 +168,34 @@
           }
         }
       });
+    } else {
+      // If not on shorts URL, cleanup any active blocking
+      if (window._blockShortScroll) {
+        const { preventScroll, preventKeyScroll, hideNavigationInterval, shortsContainer } = window._blockShortScroll;
+
+        if (shortsContainer) {
+          shortsContainer.removeEventListener('wheel', preventScroll);
+          shortsContainer.removeEventListener('mousewheel', preventScroll);
+          shortsContainer.removeEventListener('touchstart', preventScroll);
+          shortsContainer.removeEventListener('touchmove', preventScroll);
+          shortsContainer.removeEventListener('touchend', preventScroll);
+          shortsContainer.removeEventListener('keydown', preventKeyScroll, { capture: true });
+
+          if (shortsContainer !== document.body) {
+            shortsContainer.style.overflow = '';
+            shortsContainer.style.touchAction = '';
+          }
+        }
+
+        clearInterval(hideNavigationInterval);
+        window._blockShortScroll = null;
+      }
+
+      // Show the navigation container again
+      const navigationContainer = document.querySelector('.navigation-container.style-scope.ytd-shorts');
+      if (navigationContainer) {
+        navigationContainer.style.display = '';
+      }
     }
   }
 

@@ -3,6 +3,7 @@ let settings = {
   speed: false,
   sidebar: false,
   comments: false,
+  removeNotifications: false,
   hideFeedMode: "remove"
 };
 
@@ -123,6 +124,7 @@ function applyAllFeaturesOnce() {
   hideShorts();
   handleVideoFeed();
   handleComments();
+  handleNotifications();
   handleSpeed();
 }
 
@@ -432,6 +434,14 @@ function handleComments() {
     if (commentsButton) {
       commentsButton.style.display = settings.comments ? "none" : "";
     }
+  }
+}
+
+// ============ NOTIFICATIONS HANDLING ============
+function handleNotifications() {
+  const notifications = document.querySelector('ytd-notification-topbar-button-renderer');
+  if (notifications) {
+    notifications.style.display = settings.removeNotifications ? "none" : "";
   }
 }
 

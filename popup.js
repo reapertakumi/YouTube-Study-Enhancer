@@ -1,6 +1,15 @@
-const youtubeFeatureIds = ["speed", "sidebar", "comments", "blockShortScroll"];
+const youtubeFeatureIds = ["speed", "sidebar", "comments", "blockShortScroll", "removeNotifications"];
 const blockIds = ["shorts", "instagram", "twitter", "tiktok", "reddit", "pinterest", "blockYoutube"];
 const allIds = [...youtubeFeatureIds, ...blockIds];
+
+// Available YouTube features with descriptions
+const availableFeatures = [
+  { id: "speed", name: "Block 2x Speed", description: "Prevent videos from playing at 2x speed" },
+  { id: "sidebar", name: "Hide Video Feed", description: "Hide the recommended video sidebar" },
+  { id: "comments", name: "Hide Comments", description: "Hide the comments section" },
+  { id: "blockShortScroll", name: "Block Short Scroll", description: "Prevent scrolling to next YouTube Short" },
+  { id: "removeNotifications", name: "Remove Notifications", description: "Hide YouTube notifications" }
+];
 
 const storage = (typeof chrome !== 'undefined' && chrome.storage) ? chrome.storage : browser.storage;
 const runtime = (typeof chrome !== 'undefined' && chrome.runtime) ? chrome.runtime : browser.runtime;
@@ -590,11 +599,12 @@ function setupCollapseHandlers() {
   const youtubeHeader = document.getElementById('youtubeHeader');
   const youtubeContent = document.getElementById('youtubeContent');
   const youtubeArrow = document.getElementById('youtubeArrow');
-  
+
   if (youtubeHeader && youtubeContent && youtubeArrow) {
     youtubeHeader.addEventListener('click', (e) => {
       if (e.target.closest('#settingsWheelBtn')) return;
       if (e.target.closest('#lockBtn')) return;
+      if (e.target.closest('#customizeFeaturesBtn')) return;
       e.stopPropagation();
       youtubeContent.classList.toggle('collapsed');
       youtubeArrow.classList.toggle('collapsed');
@@ -602,11 +612,11 @@ function setupCollapseHandlers() {
       storage.sync.set({ youtubeCollapsed: isCollapsed });
     });
   }
-  
+
   const blockHeader = document.getElementById('blockHeader');
   const blockContent = document.getElementById('blockContent');
   const blockArrow = document.getElementById('blockArrow');
-  
+
   if (blockHeader && blockContent && blockArrow) {
     blockHeader.addEventListener('click', (e) => {
       if (e.target.closest('#settingsWheelBtn')) return;
@@ -1850,12 +1860,122 @@ function normalizeKeyCombo(e) {
   }
 
   if (modMap[key]) {
-    return heldMods.join('+');
+    return null;
   }
 
-  if (heldMods.length === 0) {
+  if (heldMods.length === 0 && key.length === 1) {
     return key;
   }
 
-  return heldMods.join('+') + '+' + key;
+  if (heldMods.length > 0 && !modMap[key]) {
+    return heldMods.join('+') + '+' + key;
+  }
+
+  return null;
 }
+
+// Customize Features Modal
+const customizeFeaturesBtn = document.getElementById('customizeFeaturesBtn');
+const customizeFeaturesModal = document.getElementById('customizeFeaturesModal');
+const closeCustomizeFeaturesBtn = document.getElementById('closeCustomizeFeaturesBtn');
+const featuresList = document.getElementById('featuresList');
+
+function openCustomizeFeaturesModal() {
+  if (customizeFeaturesModal) {
+    customizeFeaturesModal.style.display = 'flex';
+    loadFeaturesList();
+  }
+}
+
+function closeCustomizeFeaturesModal() {
+  if (customizeFeaturesModal) {
+    customizeFeaturesModal.style.display = 'none';
+  }
+}
+
+function loadFeaturesList() {
+  if (!featuresList) return;
+
+  storage.sync.get(['visibleFeatures'], (data) => {
+    const visibleFeatures = data.visibleFeatures || ["speed", "sidebar", "comments"];
+
+    featuresList.innerHTML = '';
+
+    availableFeatures.forEach(feature => {
+      const item = document.createElement('div');
+      item.className = 'feature-item';
+      if (visibleFeatures.includes(feature.id)) {
+        item.classList.add('selected');
+      }
+
+      item.innerHTML = `
+        <div class="feature-name">${feature.name}</div>
+        <div class="feature-description">${feature.description}</div>
+      `;
+
+      item.addEventListener('click', () => {
+        toggleFeatureSelection(feature.id, item);
+      });
+
+      featuresList.appendChild(item);
+    });
+  });
+}
+
+function toggleFeatureSelection(featureId, itemElement) {
+  storage.sync.get(['visibleFeatures'], (data) => {
+    let visibleFeatures = data.visibleFeatures || ["speed", "sidebar", "comments"];
+
+    if (visibleFeatures.includes(featureId)) {
+      visibleFeatures = visibleFeatures.filter(id => id !== featureId);
+      itemElement.classList.remove('selected');
+    } else {
+      visibleFeatures.push(featureId);
+      itemElement.classList.add('selected');
+    }
+
+    storage.sync.set({ visibleFeatures }, () => {
+      updateVisibleFeaturesInPopup(visibleFeatures);
+    });
+  });
+}
+
+function updateVisibleFeaturesInPopup(visibleFeatures) {
+  const youtubeContent = document.getElementById('youtubeContent');
+  if (!youtubeContent) return;
+
+  const cards = youtubeContent.querySelectorAll('.card');
+  cards.forEach(card => {
+    const checkbox = card.querySelector('input[type="checkbox"]');
+    if (checkbox) {
+      const featureId = checkbox.id;
+      if (visibleFeatures.includes(featureId)) {
+        card.style.display = 'flex';
+      } else {
+        card.style.display = 'none';
+      }
+    }
+  });
+}
+
+if (customizeFeaturesBtn) {
+  customizeFeaturesBtn.addEventListener('click', openCustomizeFeaturesModal);
+}
+
+if (closeCustomizeFeaturesBtn) {
+  closeCustomizeFeaturesBtn.addEventListener('click', closeCustomizeFeaturesModal);
+}
+
+if (customizeFeaturesModal) {
+  customizeFeaturesModal.addEventListener('click', (e) => {
+    if (e.target === customizeFeaturesModal) {
+      closeCustomizeFeaturesModal();
+    }
+  });
+}
+
+// Initialize visible features on load
+storage.sync.get(['visibleFeatures'], (data) => {
+  const visibleFeatures = data.visibleFeatures || ["speed", "sidebar", "comments"];
+  updateVisibleFeaturesInPopup(visibleFeatures);
+});
