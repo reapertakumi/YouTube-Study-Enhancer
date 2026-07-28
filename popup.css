@@ -4669,117 +4669,233 @@ body.light-theme.theme-lofi::-webkit-scrollbar-thumb:hover {
 /* ============================================ */
 
 .add-hotkey-btn {
-  background: rgba(62, 166, 255, 0.14);
-  border: 1px solid rgba(62, 166, 255, 0.35);
+  background: linear-gradient(135deg, rgba(62, 166, 255, 0.15), rgba(62, 166, 255, 0.08));
+  border: 1px solid rgba(62, 166, 255, 0.3);
   color: #3ea6ff;
-  border-radius: 10px;
-  padding: 6px 14px;
+  border-radius: 12px;
+  padding: 8px 16px;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.18s ease;
+  transition: all 0.25s cubic-bezier(0.2, 0.9, 0.4, 1.1);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.add-hotkey-btn::before {
+  content: '+';
+  font-size: 14px;
+  font-weight: 700;
 }
 
 .add-hotkey-btn:hover {
-  background: rgba(62, 166, 255, 0.22);
-  transform: translateY(-1px);
+  background: linear-gradient(135deg, rgba(62, 166, 255, 0.25), rgba(62, 166, 255, 0.15));
+  border-color: rgba(62, 166, 255, 0.5);
+  transform: translateY(-2px);
+}
+
+.add-hotkey-btn:active {
+  transform: translateY(0);
 }
 
 .hotkey-form {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-top: 8px;
-  animation: fadeInUp 0.25s ease-out;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  animation: slideDown 0.3s cubic-bezier(0.2, 0.9, 0.4, 1.1);
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .hotkey-input {
   width: 100%;
-  padding: 10px 12px;
-  background: #2a2a2a;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 12px 14px;
+  background: rgba(30, 30, 30, 0.8);
+  border: 1.5px solid rgba(255, 255, 255, 0.1);
   border-radius: 10px;
   color: white;
-  font-size: 12px;
+  font-size: 13px;
   box-sizing: border-box;
-  transition: border-color 0.2s ease;
+  transition: all 0.2s ease;
+  font-family: system-ui, -apple-system, sans-serif;
 }
 
 .hotkey-input:focus {
   border-color: #3ea6ff;
+  background: rgba(30, 30, 30, 1);
   outline: none;
 }
 
 .hotkey-input::placeholder {
-  opacity: 0.5;
+  opacity: 0.45;
+  color: #888;
+}
+
+.hotkey-input[readonly] {
+  background: rgba(62, 166, 255, 0.08);
+  border-color: rgba(62, 166, 255, 0.25);
+  color: #3ea6ff;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.hotkey-input[readonly]:focus {
+  outline: none;
 }
 
 .hotkey-form-buttons {
   display: flex;
-  gap: 8px;
+  gap: 10px;
 }
 
 .hotkey-btn {
   flex: 1;
-  padding: 8px 12px;
+  padding: 10px 14px;
   border: none;
   border-radius: 10px;
-  font-size: 12px;
-  font-weight: 500;
+  font-size: 13px;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.18s ease;
+  transition: all 0.2s cubic-bezier(0.2, 0.9, 0.4, 1.1);
+  position: relative;
+  overflow: hidden;
+}
+
+.hotkey-btn::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.3);
+  transform: translate(-50%, -50%);
+  transition: width 0.4s, height 0.4s;
+}
+
+.hotkey-btn:active::after {
+  width: 200px;
+  height: 200px;
 }
 
 .hotkey-btn.primary {
-  background: #3ea6ff;
+  background: linear-gradient(135deg, #3ea6ff, #2a8ee6);
   color: white;
 }
 
 .hotkey-btn.primary:hover {
-  background: #2a8ee6;
+  background: linear-gradient(135deg, #4bb0ff, #3a9cf0);
   transform: translateY(-1px);
+}
+
+.hotkey-btn.primary:active {
+  transform: translateY(0);
 }
 
 .hotkey-btn.secondary {
   background: rgba(255, 255, 255, 0.08);
   color: #aaa;
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .hotkey-btn.secondary:hover {
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.12);
   color: #fff;
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
 .hotkeys-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin-top: 10px;
+  gap: 8px;
+  margin-top: 16px;
+  max-height: 280px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.hotkeys-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.hotkeys-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.hotkeys-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+}
+
+.hotkeys-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
 }
 
 .hotkey-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 10px;
-  padding: 10px 12px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 12px 14px;
   font-size: 12px;
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.hotkey-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: linear-gradient(180deg, #3ea6ff, #2a8ee6);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.hotkey-item:hover {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.03));
+  border-color: rgba(255, 255, 255, 0.12);
+  transform: translateX(2px);
+}
+
+.hotkey-item:hover::before {
+  opacity: 1;
 }
 
 .hotkey-item-content {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   flex: 1;
   min-width: 0;
+  padding-right: 12px;
 }
 
 .hotkey-item-actions {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   margin-left: 8px;
 }
 
@@ -4787,27 +4903,40 @@ body.light-theme.theme-lofi::-webkit-scrollbar-thumb:hover {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 24px;
-  height: 24px;
-  background: rgba(62, 166, 255, 0.18);
-  border: 1px solid rgba(62, 166, 255, 0.3);
-  border-radius: 6px;
+  min-width: 28px;
+  height: 28px;
+  background: linear-gradient(135deg, rgba(62, 166, 255, 0.2), rgba(62, 166, 255, 0.12));
+  border: 1.5px solid rgba(62, 166, 255, 0.35);
+  border-radius: 8px;
   color: #3ea6ff;
   font-size: 11px;
   font-weight: 700;
-  font-family: monospace;
-  padding: 0 6px;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  padding: 0 8px;
   align-self: flex-start;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  transition: all 0.2s ease;
+}
+
+.hotkey-item:hover .hotkey-item-kbd {
+  background: linear-gradient(135deg, rgba(62, 166, 255, 0.3), rgba(62, 166, 255, 0.2));
+  border-color: rgba(62, 166, 255, 0.5);
 }
 
 .hotkey-item-url {
-  color: #ccc;
+  color: #b8c5d0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 160px;
   font-size: 12px;
   font-weight: 500;
+  transition: color 0.2s ease;
+}
+
+.hotkey-item:hover .hotkey-item-url {
+  color: #e2e8f0;
 }
 
 .hotkey-item-delete {
@@ -4815,16 +4944,22 @@ body.light-theme.theme-lofi::-webkit-scrollbar-thumb:hover {
   border: none;
   color: #888;
   cursor: pointer;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 14px;
+  padding: 6px;
+  border-radius: 8px;
+  font-size: 16px;
   line-height: 1;
-  transition: all 0.15s ease;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
 }
 
 .hotkey-item-delete:hover {
   color: #dc3545;
-  background: rgba(220, 53, 69, 0.1);
+  background: rgba(220, 53, 69, 0.12);
+  transform: scale(1.1);
 }
 
 .hotkey-item-edit {
@@ -4832,71 +4967,190 @@ body.light-theme.theme-lofi::-webkit-scrollbar-thumb:hover {
   border: none;
   color: #888;
   cursor: pointer;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 14px;
+  padding: 6px;
+  border-radius: 8px;
+  font-size: 16px;
   line-height: 1;
-  transition: all 0.15s ease;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
 }
 
 .hotkey-item-edit:hover {
   color: #3ea6ff;
-  background: rgba(62, 166, 255, 0.1);
+  background: rgba(62, 166, 255, 0.12);
+  transform: scale(1.1);
 }
 
 .hotkey-item.hotkey-item-default {
-  background: rgba(62, 166, 255, 0.06);
-  border-color: rgba(62, 166, 255, 0.15);
+  background: linear-gradient(135deg, rgba(62, 166, 255, 0.08), rgba(62, 166, 255, 0.04));
+  border-color: rgba(62, 166, 255, 0.2);
+}
+
+.hotkey-item.hotkey-item-default::before {
+  opacity: 1;
+}
+
+/* Empty state for hotkeys list */
+.hotkeys-list:empty::before {
+  content: 'No hotkeys configured yet';
+  display: block;
+  text-align: center;
+  padding: 32px 16px;
+  color: #666;
+  font-size: 13px;
+  font-style: italic;
+  opacity: 0.7;
+}
+
+.hotkey-info-card {
+  background: linear-gradient(135deg, rgba(62, 166, 255, 0.06), rgba(62, 166, 255, 0.03));
+  border: 1px solid rgba(62, 166, 255, 0.15);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-top: 12px;
+  color: #8fa3b8;
+  font-size: 11px;
+  line-height: 1.5;
+  text-align: center;
+  transition: all 0.2s ease;
+}
+
+.hotkey-info-card:hover {
+  background: linear-gradient(135deg, rgba(62, 166, 255, 0.1), rgba(62, 166, 255, 0.05));
+  border-color: rgba(62, 166, 255, 0.25);
+  color: #a8bcd0;
 }
 
 /* Light theme hotkey UI */
 body.light-theme .hotkey-input {
-  background: #f5f5f5;
-  border-color: rgba(0, 0, 0, 0.1);
+  background: rgba(245, 245, 245, 0.9);
+  border-color: rgba(0, 0, 0, 0.12);
   color: #1a1a1a;
 }
 
 body.light-theme .hotkey-input:focus {
   border-color: #4a90e2;
+  background: #ffffff;
+}
+
+body.light-theme .hotkey-input::placeholder {
+  color: #999;
+}
+
+body.light-theme .hotkey-input[readonly] {
+  background: rgba(74, 144, 226, 0.08);
+  border-color: rgba(74, 144, 226, 0.25);
+  color: #4a90e2;
 }
 
 body.light-theme .add-hotkey-btn {
-  background: rgba(74, 144, 226, 0.1);
+  background: linear-gradient(135deg, rgba(74, 144, 226, 0.12), rgba(74, 144, 226, 0.06));
   border-color: rgba(74, 144, 226, 0.3);
   color: #4a90e2;
 }
 
 body.light-theme .add-hotkey-btn:hover {
-  background: rgba(74, 144, 226, 0.2);
+  background: linear-gradient(135deg, rgba(74, 144, 226, 0.2), rgba(74, 144, 226, 0.12));
+  border-color: rgba(74, 144, 226, 0.5);
+}
+
+body.light-theme .hotkey-form {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.08);
 }
 
 body.light-theme .hotkey-btn.primary {
-  background: #4a90e2;
+  background: linear-gradient(135deg, #4a90e2, #3a7bc8);
+  color: white;
 }
 
 body.light-theme .hotkey-btn.primary:hover {
-  background: #3a7bc8;
+  background: linear-gradient(135deg, #5aa0f2, #4a8cd8);
 }
 
 body.light-theme .hotkey-btn.secondary {
-  background: rgba(0, 0, 0, 0.05);
-  color: #888;
+  background: rgba(0, 0, 0, 0.06);
+  color: #666;
+  border-color: rgba(0, 0, 0, 0.12);
 }
 
 body.light-theme .hotkey-btn.secondary:hover {
   background: rgba(0, 0, 0, 0.1);
   color: #333;
+  border-color: rgba(0, 0, 0, 0.18);
 }
 
 body.light-theme .hotkey-item {
-  background: rgba(0, 0, 0, 0.02);
-  border-color: rgba(0, 0, 0, 0.06);
+  background: linear-gradient(135deg, rgba(0, 0, 0, 0.03), rgba(0, 0, 0, 0.015));
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+body.light-theme .hotkey-item::before {
+  background: linear-gradient(180deg, #4a90e2, #3a7bc8);
+}
+
+body.light-theme .hotkey-item:hover {
+  background: linear-gradient(135deg, rgba(0, 0, 0, 0.05), rgba(0, 0, 0, 0.025));
+  border-color: rgba(0, 0, 0, 0.12);
 }
 
 body.light-theme .hotkey-item-kbd {
-  background: rgba(74, 144, 226, 0.12);
-  border-color: rgba(74, 144, 226, 0.25);
+  background: linear-gradient(135deg, rgba(74, 144, 226, 0.15), rgba(74, 144, 226, 0.08));
+  border-color: rgba(74, 144, 226, 0.3);
   color: #4a90e2;
+}
+
+body.light-theme .hotkey-item:hover .hotkey-item-kbd {
+  background: linear-gradient(135deg, rgba(74, 144, 226, 0.25), rgba(74, 144, 226, 0.15));
+  border-color: rgba(74, 144, 226, 0.45);
+}
+
+body.light-theme .hotkey-item-url {
+  color: #555;
+}
+
+body.light-theme .hotkey-item:hover .hotkey-item-url {
+  color: #333;
+}
+
+body.light-theme .hotkey-item-delete,
+body.light-theme .hotkey-item-edit {
+  color: #999;
+}
+
+body.light-theme .hotkey-item-delete:hover {
+  color: #dc3545;
+  background: rgba(220, 53, 69, 0.1);
+}
+
+body.light-theme .hotkey-item-edit:hover {
+  color: #4a90e2;
+  background: rgba(74, 144, 226, 0.1);
+}
+
+body.light-theme .hotkey-item.hotkey-item-default {
+  background: linear-gradient(135deg, rgba(74, 144, 226, 0.08), rgba(74, 144, 226, 0.04));
+  border-color: rgba(74, 144, 226, 0.2);
+}
+
+body.light-theme .hotkeys-list:empty::before {
+  color: #999;
+}
+
+body.light-theme .hotkey-info-card {
+  background: linear-gradient(135deg, rgba(74, 144, 226, 0.06), rgba(74, 144, 226, 0.03));
+  border-color: rgba(74, 144, 226, 0.15);
+  color: #666;
+}
+
+body.light-theme .hotkey-info-card:hover {
+  background: linear-gradient(135deg, rgba(74, 144, 226, 0.1), rgba(74, 144, 226, 0.05));
+  border-color: rgba(74, 144, 226, 0.25);
+  color: #555;
 }
 
 body.light-theme .hotkey-item-url {

@@ -1,5 +1,6 @@
 let settings = {
   shorts: false,
+  blockShortScroll: false,
   speed: false,
   sidebar: false,
   comments: false,
@@ -16,6 +17,7 @@ let isInitialized = false;
 let feedOriginalDisplay = null;
 let resizeTimeout = null;
 let shortsStyleElement = null;
+let sidemenuShortsStyleElement = null;
 
 let originalTheaterStateBeforeEnable = false;
 let isRemoveModeActive = false;
@@ -44,7 +46,7 @@ const storage = (typeof chrome !== 'undefined' && chrome.storage) ? chrome.stora
 // Fix #1 & #5: Proper settings loading with error handling
 async function loadSettings() {
   try {
-    const data = await storage.sync.get(["shorts", "speed", "sidebar", "comments", "hideFeedMode"]);
+    const data = await storage.sync.get(["shorts", "blockShortScroll", "speed", "sidebar", "comments", "hideFeedMode"]);
     console.log("Settings loaded:", data);
     settings = { ...settings, ...data };
     return true;
@@ -69,7 +71,7 @@ loadSettings().then(() => {
 storage.onChanged.addListener(changes => {
   let settingsChanged = false;
   Object.keys(changes).forEach(key => {
-    if (key in settings || key === 'hideFeedMode') {
+    if (key in settings || key === 'hideFeedMode' || key === 'blockShortScroll') {
       const oldValue = settings[key];
       const newValue = changes[key].newValue;
       settings[key] = newValue;
@@ -94,7 +96,7 @@ if (typeof chrome !== 'undefined' && chrome.runtime) {
       console.log("Received settings update from popup:", message.settings);
       let changed = false;
       Object.keys(message.settings).forEach(key => {
-        if (key in settings || key === 'hideFeedMode') {
+        if (key in settings || key === 'hideFeedMode' || key === 'blockShortScroll') {
           if (settings[key] !== message.settings[key]) {
             const oldValue = settings[key];
             settings[key] = message.settings[key];
@@ -130,68 +132,87 @@ function applyAllFeaturesOnce() {
 
 // ============ HIDE SHORTS ============
 function hideShorts() {
-  if (!settings.shorts) {
-    // Remove the style element if shorts hiding is disabled
-    if (shortsStyleElement) {
-      shortsStyleElement.remove();
-      shortsStyleElement = null;
-    }
-    return;
+  // Remove existing style elements
+  if (shortsStyleElement) {
+    shortsStyleElement.remove();
+    shortsStyleElement = null;
   }
-  
-  // If already injected, don't duplicate
-  if (shortsStyleElement) return;
-  
-  shortsStyleElement = document.createElement('style');
-  shortsStyleElement.id = 'study-enhancer-hide-shorts';
-  shortsStyleElement.textContent = `
-    /* Hide sidebar shorts link in mini guide */
-    a[href="/shorts/"],
-    a[href="/shorts"],
-    ytd-mini-guide-entry-renderer a[href*="/shorts/"] {
-      display: none !important;
-    }
-    
-    /* Hide the entire shorts shelf on homepage */
-    ytd-rich-section-renderer:has(ytd-rich-shelf-renderer[is-shorts]),
-    ytd-rich-shelf-renderer[is-shorts],
-    ytd-reel-shelf-renderer,
-    ytd-rich-item-renderer:has([href*="/shorts/"]),
-    ytd-video-renderer:has([href*="/shorts/"]) {
-      display: none !important;
-    }
-    
-    /* Hide the shorts tab in guide */
-    ytd-guide-entry-renderer a[href="/shorts"],
-    ytd-mini-guide-entry-renderer a[href="/shorts"] {
-      display: none !important;
-    }
-    
-    /* Hide shorts button in top bar */
-    ytd-topbar-menu-button-renderer[aria-label="Shorts"],
-    ytd-topbar-menu-button-renderer button[aria-label="Shorts"] {
-      display: none !important;
-    }
-    
-    /* Hide shorts guide entry on video pages (full guide) */
-    ytd-guide-section-renderer ytd-guide-entry-renderer a[title="Shorts"],
-    ytd-guide-section-renderer ytd-guide-entry-renderer a[href="/shorts"],
-    ytd-guide-entry-renderer a[title="Shorts"] {
-      display: none !important;
-    }
-    
-    /* Hide shorts in search results grid */
-    .ytGridShelfViewModelGridShelfRow,
-    ytd-item-section-renderer .ytGridShelfViewModelGridShelfRow,
-    ytm-shorts-lockup-view-model-v2,
-    ytm-shorts-lockup-view-model,
-    [class*="GridShelf"]:has(ytm-shorts-lockup-view-model) {
-      display: none !important;
-    }
-  `;
-  
-  document.head.appendChild(shortsStyleElement);
-  console.log("Shorts hiding enabled");
+  if (sidemenuShortsStyleElement) {
+    sidemenuShortsStyleElement.remove();
+    sidemenuShortsStyleElement = null;
+  }
+
+  // If shorts setting is enabled, hide all shorts
+  if (settings.shorts) {
+    shortsStyleElement = document.createElement('style');
+    shortsStyleElement.id = 'study-enhancer-hide-shorts';
+    shortsStyleElement.textContent = `
+      /* Hide sidebar shorts link in mini guide */
+      a[href="/shorts/"],
+      a[href="/shorts"],
+      ytd-mini-guide-entry-renderer a[href*="/shorts/"] {
+        display: none !important;
+      }
+
+      /* Hide the entire shorts shelf on homepage */
+      ytd-rich-section-renderer:has(ytd-rich-shelf-renderer[is-shorts]),
+      ytd-rich-shelf-renderer[is-shorts],
+      ytd-reel-shelf-renderer,
+      ytd-rich-item-renderer:has([href*="/shorts/"]),
+      ytd-video-renderer:has([href*="/shorts/"]) {
+        display: none !important;
+      }
+
+      /* Hide the shorts tab in guide */
+      ytd-guide-entry-renderer a[href="/shorts"],
+      ytd-mini-guide-entry-renderer a[href="/shorts"] {
+        display: none !important;
+      }
+
+      /* Hide shorts button in top bar */
+      ytd-topbar-menu-button-renderer[aria-label="Shorts"],
+      ytd-topbar-menu-button-renderer button[aria-label="Shorts"] {
+        display: none !important;
+      }
+
+      /* Hide shorts guide entry on video pages (full guide) */
+      ytd-guide-section-renderer ytd-guide-entry-renderer a[title="Shorts"],
+      ytd-guide-section-renderer ytd-guide-entry-renderer a[href="/shorts"],
+      ytd-guide-entry-renderer a[title="Shorts"] {
+        display: none !important;
+      }
+
+      /* Hide shorts in search results grid */
+      .ytGridShelfViewModelGridShelfRow,
+      ytd-item-section-renderer .ytGridShelfViewModelGridShelfRow,
+      ytm-shorts-lockup-view-model-v2,
+      ytm-shorts-lockup-view-model,
+      [class*="GridShelf"]:has(ytm-shorts-lockup-view-model) {
+        display: none !important;
+      }
+    `;
+
+    document.head.appendChild(shortsStyleElement);
+    console.log("Shorts hiding enabled");
+  }
+  // If blockShortScroll is enabled (but shorts is not), only hide sidemenu button
+  else if (settings.blockShortScroll) {
+    sidemenuShortsStyleElement = document.createElement('style');
+    sidemenuShortsStyleElement.id = 'study-enhancer-hide-sidemenu-shorts';
+    sidemenuShortsStyleElement.textContent = `
+      /* Hide shorts guide entry on video pages (full guide) */
+      ytd-guide-section-renderer ytd-guide-entry-renderer a[title="Shorts"],
+      ytd-guide-section-renderer ytd-guide-entry-renderer a[href="/shorts"],
+      ytd-guide-entry-renderer a[title="Shorts"],
+      ytd-guide-entry-renderer a[href="/shorts"],
+      ytd-mini-guide-entry-renderer a[href="/shorts"] {
+        display: none !important;
+      }
+    `;
+
+    document.head.appendChild(sidemenuShortsStyleElement);
+    console.log("Sidemenu Shorts button hiding enabled (blockShortScroll)");
+  }
 }
 
 // ============ THEATER MODE MANAGEMENT ============

@@ -104,8 +104,8 @@
           shortsContainer.addEventListener('touchmove', preventScroll, { passive: false });
           shortsContainer.addEventListener('touchend', preventScroll, { passive: false });
 
-          // Block keyboard navigation on shorts container
-          shortsContainer.addEventListener('keydown', preventKeyScroll, { capture: true });
+          // Block keyboard navigation on document (to catch events before YouTube handles them)
+          document.addEventListener('keydown', preventKeyScroll, { capture: true });
 
           // Block swipe gestures on the shorts container
           if (shortsContainer !== document.body) {
@@ -139,20 +139,20 @@
           if (window._blockShortScroll) {
             const { preventScroll, preventKeyScroll, hideNavigationInterval, shortsContainer } = window._blockShortScroll;
 
-            // Remove event listeners from shorts container
+            // Remove event listeners from shorts container and document
             if (shortsContainer) {
               shortsContainer.removeEventListener('wheel', preventScroll);
               shortsContainer.removeEventListener('mousewheel', preventScroll);
               shortsContainer.removeEventListener('touchstart', preventScroll);
               shortsContainer.removeEventListener('touchmove', preventScroll);
               shortsContainer.removeEventListener('touchend', preventScroll);
-              shortsContainer.removeEventListener('keydown', preventKeyScroll, { capture: true });
+            }
+            document.removeEventListener('keydown', preventKeyScroll, { capture: true });
 
-              // Restore shorts container styles
-              if (shortsContainer !== document.body) {
-                shortsContainer.style.overflow = '';
-                shortsContainer.style.touchAction = '';
-              }
+            // Restore shorts container styles
+            if (shortsContainer !== document.body) {
+              shortsContainer.style.overflow = '';
+              shortsContainer.style.touchAction = '';
             }
 
             // Clear interval
@@ -179,12 +179,12 @@
           shortsContainer.removeEventListener('touchstart', preventScroll);
           shortsContainer.removeEventListener('touchmove', preventScroll);
           shortsContainer.removeEventListener('touchend', preventScroll);
-          shortsContainer.removeEventListener('keydown', preventKeyScroll, { capture: true });
+        }
+        document.removeEventListener('keydown', preventKeyScroll, { capture: true });
 
-          if (shortsContainer !== document.body) {
-            shortsContainer.style.overflow = '';
-            shortsContainer.style.touchAction = '';
-          }
+        if (shortsContainer !== document.body) {
+          shortsContainer.style.overflow = '';
+          shortsContainer.style.touchAction = '';
         }
 
         clearInterval(hideNavigationInterval);
@@ -258,6 +258,25 @@
       }
       // Apply blockShortScroll changes immediately
       if (area === 'sync' && changes.blockShortScroll) {
+        // Force re-apply blocking by clearing any existing state first
+        if (window._blockShortScroll) {
+          const { preventScroll, preventKeyScroll, hideNavigationInterval, shortsContainer } = window._blockShortScroll;
+          if (shortsContainer) {
+            shortsContainer.removeEventListener('wheel', preventScroll);
+            shortsContainer.removeEventListener('mousewheel', preventScroll);
+            shortsContainer.removeEventListener('touchstart', preventScroll);
+            shortsContainer.removeEventListener('touchmove', preventScroll);
+            shortsContainer.removeEventListener('touchend', preventScroll);
+          }
+          document.removeEventListener('keydown', preventKeyScroll, { capture: true });
+          if (shortsContainer !== document.body) {
+            shortsContainer.style.overflow = '';
+            shortsContainer.style.touchAction = '';
+          }
+          clearInterval(hideNavigationInterval);
+          window._blockShortScroll = null;
+        }
+        // Now apply the new setting
         blockShortScroll();
       }
     });
