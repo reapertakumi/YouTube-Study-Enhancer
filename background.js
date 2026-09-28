@@ -575,3 +575,131 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     });
   }
 });
+
+// Schedule checking in background (runs even when popup is closed)
+let scheduleCheckInterval = null;
+
+function startScheduleCheck() {
+  if (scheduleCheckInterval) {
+    clearInterval(scheduleCheckInterval);
+  }
+
+  scheduleCheckInterval = setInterval(() => {
+    chrome.storage.sync.get(['schedule'], (data) => {
+      if (!data.schedule || !data.schedule.enabled) {
+        return;
+      }
+
+      const now = new Date();
+      const currentDay = now.getDay();
+      const currentTime = now.getHours() * 60 + now.getMinutes();
+
+      const [startHours, startMins] = data.schedule.startTime.split(':').map(Number);
+      const [endHours, endMins] = data.schedule.endTime.split(':').map(Number);
+
+      const startTotalMinutes = startHours * 60 + startMins;
+      const endTotalMinutes = endHours * 60 + endMins;
+
+      const isWithinTime = currentTime >= startTotalMinutes && currentTime < endTotalMinutes;
+      const isCorrectDay = data.schedule.days.includes(currentDay);
+
+      console.log('Background schedule check:', {
+        currentTime: `${now.getHours()}:${now.getMinutes()}`,
+        scheduleTime: `${data.schedule.startTime} - ${data.schedule.endTime}`,
+        isWithinTime,
+        isCorrectDay,
+        currentDay,
+        scheduledDays: data.schedule.days,
+        wasActive: data.schedule.active
+      });
+
+      if (isWithinTime && isCorrectDay && !data.schedule.active) {
+        // Start time reached - activate schedule
+        console.log('Start time reached, activating schedule in background...');
+        data.schedule.active = true;
+        chrome.storage.sync.set({ schedule: data.schedule }, () => {
+          // Save current user preferences before applying schedule
+          const allIds = ["speed", "sidebar", "comments", "blockShortScroll", "removeNotifications", "shorts", "instagram", "twitter", "tiktok", "reddit", "pinterest", "blockYoutube"];
+          chrome.storage.sync.get([...allIds, 'customDomains'], (currentData) => {
+            const currentSettings = {};
+            allIds.forEach(id => {
+              currentSettings[id] = currentData[id] === true;
+            });
+            currentSettings.customDomains = currentData.customDomains || {};
+            chrome.storage.sync.set({ preScheduleSettings: currentSettings }, () => {
+              // Apply schedule features for regular IDs
+              const newSettings = {};
+              allIds.forEach(id => {
+                newSettings[id] = data.schedule.features.includes(id);
+              });
+
+              // Apply schedule features for custom domains
+              const newCustomDomains = {};
+              Object.keys(currentData.customDomains || {}).forEach(domain => {
+                const featureId = `custom_${domain}`;
+                newCustomDomains[domain] = data.schedule.features.includes(featureId);
+              });
+
+              chrome.storage.sync.set({ ...newSettings, customDomains: newCustomDomains }, () => {
+                // Notify all tabs to reload settings
+                chrome.tabs.query({}, (tabs) => {
+                  tabs.forEach(tab => {
+                    if (tab.url && (tab.url.includes('youtube.com') || tab.url.includes('http'))) {
+                      chrome.tabs.sendMessage(tab.id, { action: 'reloadSettings' }).catch(() => {
+                        // Ignore errors for tabs that can't receive messages
+                      });
+                    }
+                  });
+                });
+              });
+            });
+          });
+        });
+      } else if ((!isWithinTime || !isCorrectDay) && data.schedule.active) {
+        // End time reached or wrong day - deactivate schedule
+        console.log('End time reached or wrong day, deactivating schedule in background...');
+        data.schedule.active = false;
+        chrome.storage.sync.set({ schedule: data.schedule }, () => {
+          // Restore pre-schedule settings
+          chrome.storage.sync.get(['preScheduleSettings'], (preData) => {
+            if (preData.preScheduleSettings) {
+              chrome.storage.sync.set(preData.preScheduleSettings, () => {
+                // Notify all tabs to reload settings
+                chrome.tabs.query({}, (tabs) => {
+                  tabs.forEach(tab => {
+                    if (tab.url && (tab.url.includes('youtube.com') || tab.url.includes('http'))) {
+                      chrome.tabs.sendMessage(tab.id, { action: 'reloadSettings' }).catch(() => {
+                        // Ignore errors for tabs that can't receive messages
+                      });
+                    }
+                  });
+                });
+              });
+            }
+          });
+        });
+      }
+    });
+  }, 1000); // Check every second for instant response
+}
+
+// Start schedule check when extension loads
+chrome.storage.sync.get(['schedule'], (data) => {
+  if (data.schedule && data.schedule.enabled) {
+    startScheduleCheck();
+  }
+});
+
+// Listen for schedule changes
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'sync' && changes.schedule) {
+    if (changes.schedule.newValue && changes.schedule.newValue.enabled) {
+      startScheduleCheck();
+    } else {
+      if (scheduleCheckInterval) {
+        clearInterval(scheduleCheckInterval);
+        scheduleCheckInterval = null;
+      }
+    }
+  }
+});

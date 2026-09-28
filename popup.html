@@ -133,7 +133,7 @@
     <div class="version-section">
       <div id="versionDisplay" class="version-number"></div>
       <div class="made-by">
-        <a href="https://github.com/reapertakumi/YouTube-Study-Enhancer" target="_blank" class="github-link">made by @reapertakumi, yasmin</a>
+        <a href="https://github.com/reapertakumi/YouTube-Study-Enhancer" target="_blank" class="github-link">made by @reapertakumi</a>
       </div>
     </div>
   </div>
@@ -203,6 +203,11 @@
             <button class="toggle-option" data-feedmode="remove" data-tooltip="Removes the feed and expands the video.">Remove</button>
             <button class="toggle-option" data-feedmode="hide" data-tooltip="Hides the feed and keeps the original player size.">Hide</button>
           </div>
+        </div>
+        <div class="settings-divider"></div>
+
+        <div class="settings-section">
+          <button id="openScheduleBtn" class="open-schedule-btn">Open Schedule</button>
         </div>
         <div class="settings-divider"></div>
 
@@ -339,6 +344,59 @@
       </div>
       <div class="customize-features-body">
         <div id="featuresList" class="features-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCHEDULE MODAL -->
+  <div id="scheduleModal" class="schedule-modal" style="display: none;">
+    <div class="schedule-modal-content">
+      <div class="schedule-modal-header">
+        <div class="schedule-header-title">
+          <span>Schedule</span>
+          <div class="schedule-header-underline"></div>
+        </div>
+        <button id="closeScheduleBtn" class="schedule-modal-close">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <div class="schedule-modal-body">
+        <div class="schedule-time-section">
+          <div class="schedule-time-row">
+            <div class="schedule-time-group">
+              <label class="schedule-label">Start Time</label>
+              <input type="time" id="scheduleStartTime" class="schedule-time-input">
+            </div>
+            <div class="schedule-time-group">
+              <label class="schedule-label">End Time</label>
+              <input type="time" id="scheduleEndTime" class="schedule-time-input">
+            </div>
+          </div>
+          <div class="schedule-days-section">
+            <label class="schedule-label">Days</label>
+            <div class="schedule-days-row">
+              <button class="schedule-day-btn" data-day="0">Sun</button>
+              <button class="schedule-day-btn" data-day="1">Mon</button>
+              <button class="schedule-day-btn" data-day="2">Tue</button>
+              <button class="schedule-day-btn" data-day="3">Wed</button>
+              <button class="schedule-day-btn" data-day="4">Thu</button>
+              <button class="schedule-day-btn" data-day="5">Fri</button>
+              <button class="schedule-day-btn" data-day="6">Sat</button>
+            </div>
+          </div>
+        </div>
+        <div class="schedule-features-section">
+          <div id="scheduleFeaturesList" class="schedule-features-list"></div>
+        </div>
+        <div class="schedule-status-section">
+          <div class="schedule-status-row">
+            <span class="schedule-status-label">Status:</span>
+            <span id="scheduleStatus" class="schedule-status-value">Inactive</span>
+          </div>
+          <button id="toggleScheduleBtn" class="toggle-schedule-btn">Enable Schedule</button>
+        </div>
       </div>
     </div>
   </div>

@@ -1,4 +1,35 @@
 document.addEventListener("DOMContentLoaded", () => {
+  // --- Loading Screen Logic ---
+  const loadingScreen = document.getElementById('loading-screen');
+
+  // Check if this is the first load using localStorage
+  const hasLoadedBefore = localStorage.getItem('blockerInitialized');
+
+  if (!hasLoadedBefore) {
+    // Show loading screen for first-time initialization
+    if (loadingScreen) {
+      loadingScreen.style.display = 'flex';
+    }
+
+    // Mark as initialized
+    localStorage.setItem('blockerInitialized', 'true');
+
+    // Hide loading screen after initialization (2 seconds)
+    setTimeout(() => {
+      if (loadingScreen) {
+        loadingScreen.classList.add('hidden');
+        setTimeout(() => {
+          loadingScreen.style.display = 'none';
+        }, 500);
+      }
+    }, 2000);
+  } else {
+    // Hide loading screen immediately if already initialized
+    if (loadingScreen) {
+      loadingScreen.style.display = 'none';
+    }
+  }
+
   // --- Quote Display Logic ---
   const quotes = [
     {
@@ -172,7 +203,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const closeModalBtn = document.getElementById("close-modal-btn");
   const bgGallery = document.getElementById("bg-gallery");
   const bgUploader = document.getElementById("bg-uploader");
-  const uploadTrigger = document.getElementById("upload-trigger");
 
   // Timer Settings Elements
   const timerSettingsBtn = document.getElementById("timer-settings-btn");
@@ -236,10 +266,11 @@ document.addEventListener("DOMContentLoaded", () => {
   const dbName = "CozySpaceDB";
   const storeName = "backgrounds";
   const musicStoreName = "music";
+  const ambientStoreName = "ambient_sounds";
 
   function getDB() {
     return new Promise((resolve, reject) => {
-      const request = indexedDB.open(dbName, 3);
+      const request = indexedDB.open(dbName, 4);
       request.onupgradeneeded = (e) => {
         const db = e.target.result;
         if (!db.objectStoreNames.contains(storeName)) {
@@ -253,6 +284,12 @@ document.addEventListener("DOMContentLoaded", () => {
             keyPath: "id",
           });
           musicStore.createIndex("uploadedAt", "uploadedAt", { unique: false });
+        }
+        if (!db.objectStoreNames.contains(ambientStoreName)) {
+          const ambientStore = db.createObjectStore(ambientStoreName, {
+            keyPath: "id",
+          });
+          ambientStore.createIndex("cachedAt", "cachedAt", { unique: false });
         }
       };
       request.onsuccess = (e) => resolve(e.target.result);
@@ -301,6 +338,18 @@ document.addEventListener("DOMContentLoaded", () => {
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
     });
+  }
+
+  async function handleImageUpload(file) {
+    const id = "custom_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9);
+    await saveBackground(file, id, false);
+    await loadBackgrounds();
+
+    // Switch to custom tab and select the new background
+    const customTab = document.querySelector('.bg-tab[data-tab="custom"]');
+    if (customTab) {
+      customTab.click();
+    }
   }
 
   async function saveMusicFile(blob, id, name) {
@@ -466,67 +515,96 @@ document.addEventListener("DOMContentLoaded", () => {
       // Sort by last used (most recent first)
       allBackgrounds.sort((a, b) => b.lastUsed - a.lastUsed);
 
-      // Clear gallery
-      bgGallery.innerHTML = "";
+      // Separate built-in and custom backgrounds
+      const builtInBackgrounds = allBackgrounds.filter(bg => bg.isGitHub);
+      const customBackgrounds = allBackgrounds.filter(bg => !bg.isGitHub);
 
-      // Add upload button first (always in same position)
-      const uploadBtn = document.createElement("div");
-      uploadBtn.className = "bg-option upload-btn";
-      uploadBtn.id = "upload-trigger";
-      uploadBtn.title = "Upload your own image";
-      uploadBtn.textContent = "+";
-      bgGallery.appendChild(uploadBtn);
+      // Load built-in gallery
+      const bgGallery = document.getElementById("bg-gallery");
+      if (bgGallery) {
+        bgGallery.innerHTML = "";
+        builtInBackgrounds.forEach((bg) => {
+          const option = document.createElement("div");
+          option.className = "bg-option";
+          option.style.backgroundImage = `url(${bg.url})`;
+          option.dataset.id = bg.id;
 
-      // Add scroll functionality if more than 5 rows (15 items with 3 columns)
-      if (allBackgrounds.length > 15) {
-        bgGallery.style.maxHeight = "480px"; // 5 rows * 80px height + gaps
-        bgGallery.style.overflowY = "auto";
-        bgGallery.style.padding = "10px";
-      } else {
-        bgGallery.style.maxHeight = "none";
-        bgGallery.style.overflowY = "visible";
-        bgGallery.style.padding = "5px";
+          option.onclick = async () => {
+            await applyBackground(bg);
+            updateBackgroundPreview(bg);
+          };
+
+          const removeBtn = document.createElement("button");
+          removeBtn.className = "remove-bg-btn";
+          removeBtn.textContent = "×";
+          removeBtn.onclick = async (e) => {
+            e.stopPropagation();
+            await deleteBackground(bg.id);
+            await loadBackgrounds();
+          };
+          option.appendChild(removeBtn);
+
+          bgGallery.appendChild(option);
+        });
       }
 
-      // Add backgrounds
-      allBackgrounds.forEach((bg) => {
-        const option = document.createElement("div");
-        option.className = "bg-option";
-
-        if (bg.isGitHub) {
-          option.style.backgroundImage = `url(${bg.url})`;
-        } else {
-          // Create blob URL for uploaded backgrounds
+      // Load custom gallery
+      const customBgGallery = document.getElementById("custom-bg-gallery");
+      if (customBgGallery) {
+        customBgGallery.innerHTML = "";
+        customBackgrounds.forEach((bg) => {
+          const option = document.createElement("div");
+          option.className = "bg-option";
           const blobUrl = createBlobUrl(bg.blob);
           option.style.backgroundImage = `url(${blobUrl})`;
-        }
+          option.dataset.id = bg.id;
 
-        option.onclick = async () => {
-          await applyBackground(bg);
-          settingsModal.classList.remove("show");
-          setTimeout(() => (settingsModal.style.display = "none"), 300);
-        };
+          option.onclick = async () => {
+            await applyBackground(bg);
+            updateBackgroundPreview(bg);
+          };
 
-        // Add remove button for all backgrounds
-        const removeBtn = document.createElement("button");
-        removeBtn.className = "remove-bg-btn";
-        removeBtn.textContent = "x";
-        removeBtn.onclick = async (e) => {
-          e.stopPropagation();
-          await deleteBackground(bg.id);
-          await loadBackgrounds();
-        };
-        option.appendChild(removeBtn);
+          const removeBtn = document.createElement("button");
+          removeBtn.className = "remove-bg-btn";
+          removeBtn.textContent = "×";
+          removeBtn.onclick = async (e) => {
+            e.stopPropagation();
+            await deleteBackground(bg.id);
+            await loadBackgrounds();
+          };
+          option.appendChild(removeBtn);
 
-        bgGallery.appendChild(option);
-      });
+          customBgGallery.appendChild(option);
+        });
+      }
 
-      // Re-attach upload trigger event
-      document.getElementById("upload-trigger").onclick = () =>
-        bgUploader.click();
+      // Update background preview with current background
+      if (allBackgrounds.length > 0) {
+        updateBackgroundPreview(allBackgrounds[0]);
+      }
     } catch (e) {
       console.error("Error loading backgrounds:", e);
     }
+  }
+
+  function updateBackgroundPreview(bg) {
+    const bgPreview = document.getElementById("bg-preview");
+    if (!bgPreview) return;
+
+    if (bg.isGitHub) {
+      bgPreview.style.backgroundImage = `url(${bg.url})`;
+    } else {
+      const blobUrl = createBlobUrl(bg.blob);
+      bgPreview.style.backgroundImage = `url(${blobUrl})`;
+    }
+
+    // Update active state in galleries
+    document.querySelectorAll(".bg-option").forEach(option => {
+      option.classList.remove("active");
+      if (option.dataset.id === bg.id) {
+        option.classList.add("active");
+      }
+    });
   }
 
   // --- Timer Logic ---
@@ -591,47 +669,56 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function updateModeDurations() {
-    pomodoroDuration = parseInt(pomodoroInput.value);
-    shortBreakDuration = parseInt(shortInput.value);
-    longBreakDuration = parseInt(longInput.value);
+    if (pomodoroInput) pomodoroDuration = parseInt(pomodoroInput.value);
+    if (shortInput) shortBreakDuration = parseInt(shortInput.value);
+    if (longInput) longBreakDuration = parseInt(longInput.value);
 
-    document.querySelector('[data-mode="pomodoro"]').dataset.time =
-      pomodoroDuration * 60;
-    document.querySelector('[data-mode="short"]').dataset.time =
-      shortBreakDuration * 60;
-    document.querySelector('[data-mode="long"]').dataset.time =
-      longBreakDuration * 60;
+    const pomodoroBtn = document.querySelector('[data-mode="pomodoro"]');
+    const shortBtn = document.querySelector('[data-mode="short"]');
+    const longBtn = document.querySelector('[data-mode="long"]');
+    
+    if (pomodoroBtn) pomodoroBtn.dataset.time = pomodoroDuration * 60;
+    if (shortBtn) shortBtn.dataset.time = shortBreakDuration * 60;
+    if (longBtn) longBtn.dataset.time = longBreakDuration * 60;
 
-    preferredBreak = preferredBreakSelect.value;
-    localStorage.setItem("preferredBreak", preferredBreak);
-    autoSwitch = autoSwitchCheckbox.checked;
-    localStorage.setItem("autoSwitch", autoSwitch);
+    if (preferredBreakSelect) {
+      preferredBreak = preferredBreakSelect.value;
+      localStorage.setItem("preferredBreak", preferredBreak);
+    }
+    if (autoSwitchCheckbox) {
+      autoSwitch = autoSwitchCheckbox.checked;
+      localStorage.setItem("autoSwitch", autoSwitch);
+    }
 
     localStorage.setItem("pomodoroDuration", pomodoroDuration);
     localStorage.setItem("shortBreakDuration", shortBreakDuration);
     localStorage.setItem("longBreakDuration", longBreakDuration);
 
     if (!isRunning) {
-      timeLeft = parseInt(
-        document.querySelector(".mode-btn.active").dataset.time,
-      );
-      updateDisplay();
+      const activeModeBtn = document.querySelector(".mode-btn.active");
+      if (activeModeBtn && activeModeBtn.dataset.time) {
+        timeLeft = parseInt(activeModeBtn.dataset.time);
+        updateDisplay();
+      }
     }
   }
 
   function switchMode(mode) {
     modeBtns.forEach((btn) => btn.classList.remove("active"));
     const targetBtn = document.querySelector(`[data-mode="${mode}"]`);
-    targetBtn.classList.add("active");
-    timeLeft = parseInt(targetBtn.dataset.time);
-    updateDisplay();
-    updateModeIndicator(); // Ensures the slider follows the mode change
+    if (targetBtn) {
+      targetBtn.classList.add("active");
+      timeLeft = parseInt(targetBtn.dataset.time);
+      updateDisplay();
+      updateModeIndicator(); // Ensures the slider follows the mode change
+    }
   }
 
   // --- Event Listeners ---
   settingsBtn.onclick = () => {
     settingsModal.style.display = "flex";
     setTimeout(() => settingsModal.classList.add("show"), 10);
+    loadBackgrounds();
   };
   closeModalBtn.onclick = () => {
     settingsModal.classList.remove("show");
@@ -645,6 +732,74 @@ document.addEventListener("DOMContentLoaded", () => {
       setTimeout(() => (settingsModal.style.display = "none"), 300);
     }
   };
+
+  // Background tab switching
+  const bgTabs = document.querySelectorAll(".bg-tab");
+  const bgTabContents = document.querySelectorAll(".bg-tab-content");
+
+  if (bgTabs.length > 0) {
+    bgTabs.forEach(tab => {
+      tab.addEventListener("click", () => {
+        const targetTab = tab.dataset.tab;
+
+        // Update active tab
+        bgTabs.forEach(t => t.classList.remove("active"));
+        tab.classList.add("active");
+
+        // Show corresponding content
+        bgTabContents.forEach(content => {
+          content.style.display = "none";
+        });
+        const targetContent = document.getElementById(`${targetTab}-tab`);
+        if (targetContent) {
+          targetContent.style.display = "block";
+        }
+      });
+    });
+  }
+
+  // Upload area click handler
+  const uploadArea = document.getElementById("upload-area");
+  if (uploadArea && bgUploader) {
+    uploadArea.addEventListener("click", () => {
+      bgUploader.click();
+    });
+
+    // Drag and drop handling
+    uploadArea.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      uploadArea.style.borderColor = "rgba(255, 255, 255, 0.6)";
+      uploadArea.style.background = "rgba(255, 255, 255, 0.08)";
+    });
+
+    uploadArea.addEventListener("dragleave", (e) => {
+      e.preventDefault();
+      uploadArea.style.borderColor = "";
+      uploadArea.style.background = "";
+    });
+
+    uploadArea.addEventListener("drop", (e) => {
+      e.preventDefault();
+      uploadArea.style.borderColor = "";
+      uploadArea.style.background = "";
+
+      const files = e.dataTransfer.files;
+      if (files.length > 0 && files[0].type.startsWith("image/")) {
+        handleImageUpload(files[0]);
+      }
+    });
+  }
+
+  // Background uploader change handler
+  if (bgUploader) {
+    bgUploader.addEventListener("change", async (e) => {
+      const files = e.target.files;
+      if (files.length > 0) {
+        await handleImageUpload(files[0]);
+        bgUploader.value = "";
+      }
+    });
+  }
 
   // --- Quote and Shortcuts Toggle Settings ---
   const enableQuotesCheckbox = document.getElementById("enable-quotes");
@@ -995,51 +1150,30 @@ document.addEventListener("DOMContentLoaded", () => {
     renderSpotifyHistory();
   }
 
-  timerSettingsBtn.onclick = () => {
-    timerSettingsModal.style.display = "flex";
-    setTimeout(() => timerSettingsModal.classList.add("show"), 10);
-  };
-  closeTimerModal.onclick = () => {
-    updateModeDurations();
-    timerSettingsModal.classList.remove("show");
-    setTimeout(() => (timerSettingsModal.style.display = "none"), 300);
-  };
-
-  // Close modal when clicking outside
-  timerSettingsModal.onclick = (e) => {
-    if (e.target === timerSettingsModal) {
+  if (timerSettingsBtn) {
+    timerSettingsBtn.onclick = () => {
+      timerSettingsModal.style.display = "flex";
+      setTimeout(() => timerSettingsModal.classList.add("show"), 10);
+    };
+  }
+  if (closeTimerModal) {
+    closeTimerModal.onclick = () => {
       updateModeDurations();
       timerSettingsModal.classList.remove("show");
       setTimeout(() => (timerSettingsModal.style.display = "none"), 300);
-    }
-  };
+    };
+  }
 
-  uploadTrigger.onclick = () => bgUploader.click();
-
-  bgUploader.onchange = async (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      const id = "uploaded_" + Date.now();
-      await saveBackground(file, id, false);
-
-      // Get the saved background data
-      const db = await getDB();
-      const tx = db.transaction(storeName, "readonly");
-      const store = tx.objectStore(storeName);
-      const backgroundData = await new Promise((resolve, reject) => {
-        const req = store.get(id);
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
-      });
-
-      // Apply the new background
-      await applyBackground(backgroundData);
-
-      await loadBackgrounds();
-      settingsModal.classList.remove("show");
-      setTimeout(() => (settingsModal.style.display = "none"), 300);
-    }
-  };
+  // Close modal when clicking outside
+  if (timerSettingsModal) {
+    timerSettingsModal.onclick = (e) => {
+      if (e.target === timerSettingsModal) {
+        updateModeDurations();
+        timerSettingsModal.classList.remove("show");
+        setTimeout(() => (timerSettingsModal.style.display = "none"), 300);
+      }
+    };
+  }
 
   modeBtns.forEach(
     (btn) =>
@@ -1199,6 +1333,40 @@ document.addEventListener("DOMContentLoaded", () => {
   const addTaskBtn = document.getElementById("add-task-btn");
   const progressBar = document.getElementById("task-progress");
 
+  if (noteIcon) {
+    noteIcon.onclick = () => {
+      document.body.classList.toggle("show-tasks");
+    };
+  }
+
+  if (addTaskBtn) {
+    addTaskBtn.onclick = () => {
+      tasks.push({ text: "", completed: false });
+      renderTasks();
+
+      const currentInputs = taskListEl.querySelectorAll(".task-text-input");
+      if (currentInputs.length > 0) {
+        currentInputs[currentInputs.length - 1].focus();
+      }
+    };
+  }
+
+  if (clearAllBtn) {
+    clearAllBtn.onclick = () => {
+      if (
+        tasks.length > 0 &&
+        confirm("Are you sure you want to clear all tasks?")
+      ) {
+        tasks = [
+          { text: "", completed: false },
+          { text: "", completed: false },
+          { text: "", completed: false },
+        ];
+        renderTasks();
+      }
+    };
+  }
+
   // Fallback to 3 blank items if no history exists
   let tasks = JSON.parse(localStorage.getItem("ytEnhancerTasks"));
   if (!tasks || tasks.length === 0) {
@@ -1210,6 +1378,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function renderTasks() {
+    if (!taskListEl) return;
     taskListEl.innerHTML = "";
     let completedCount = 0;
 
@@ -1235,102 +1404,74 @@ document.addEventListener("DOMContentLoaded", () => {
     // Update progress bar tracking
     const progressPercent =
       tasks.length === 0 ? 0 : (completedCount / tasks.length) * 100;
-    progressBar.style.width = `${progressPercent}%`;
+    if (progressBar) progressBar.style.width = `${progressPercent}%`;
 
     // Save current configuration
     localStorage.setItem("ytEnhancerTasks", JSON.stringify(tasks));
   }
 
-  noteIcon.onclick = () => {
-    document.body.classList.toggle("show-tasks");
-  };
-
-  // Add structural row functionality
-  addTaskBtn.onclick = () => {
-    tasks.push({ text: "", completed: false });
-    renderTasks();
-
-    // Auto-focus the fresh row item
-    const currentInputs = taskListEl.querySelectorAll(".task-text-input");
-    if (currentInputs.length > 0) {
-      currentInputs[currentInputs.length - 1].focus();
-    }
-  };
-
   // Handle interactive updates cleanly without breaking cursor context focus trees
-  taskListEl.oninput = (e) => {
-    if (e.target.classList.contains("task-text-input")) {
-      const index = e.target.dataset.index;
-      tasks[index].text = e.target.value;
-      localStorage.setItem("ytEnhancerTasks", JSON.stringify(tasks));
+  if (taskListEl) {
+    taskListEl.oninput = (e) => {
+      if (e.target.classList.contains("task-text-input")) {
+        const index = e.target.dataset.index;
+        tasks[index].text = e.target.value;
+        localStorage.setItem("ytEnhancerTasks", JSON.stringify(tasks));
 
-      // Auto-resize textarea
-      e.target.style.height = "auto";
-      e.target.style.height = e.target.scrollHeight + "px";
-    }
-  };
+        // Auto-resize textarea
+        e.target.style.height = "auto";
+        e.target.style.height = e.target.scrollHeight + "px";
+      }
+    };
 
-  // Handle Enter and Shift+Enter for task inputs
-  taskListEl.onkeydown = (e) => {
-    if (e.target.classList.contains("task-text-input")) {
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        const index = parseInt(e.target.dataset.index);
-        tasks.push({ text: "", completed: false });
-        renderTasks();
-
-        // Auto-focus the fresh row item
-        const currentInputs = taskListEl.querySelectorAll(".task-text-input");
-        if (currentInputs.length > 0) {
-          currentInputs[currentInputs.length - 1].focus();
-        }
-      } else if (e.key === "Backspace" && e.target.value === "") {
-        e.preventDefault();
-        const index = parseInt(e.target.dataset.index);
-        if (index > 0) {
-          tasks.splice(index, 1);
+    // Handle Enter and Shift+Enter for task inputs
+    taskListEl.onkeydown = (e) => {
+      if (e.target.classList.contains("task-text-input")) {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          const index = parseInt(e.target.dataset.index);
+          tasks.push({ text: "", completed: false });
           renderTasks();
 
-          // Focus on the previous task and move cursor to end
+          // Auto-focus the fresh row item
           const currentInputs = taskListEl.querySelectorAll(".task-text-input");
-          if (currentInputs.length > 0 && currentInputs[index - 1]) {
-            const prevInput = currentInputs[index - 1];
-            prevInput.focus();
-            prevInput.setSelectionRange(
-              prevInput.value.length,
-              prevInput.value.length,
-            );
+          if (currentInputs.length > 0) {
+            currentInputs[currentInputs.length - 1].focus();
+          }
+        } else if (e.key === "Backspace" && e.target.value === "") {
+          e.preventDefault();
+          const index = parseInt(e.target.dataset.index);
+          if (index > 0) {
+            tasks.splice(index, 1);
+            renderTasks();
+
+            // Focus on the previous task and move cursor to end
+            const currentInputs = taskListEl.querySelectorAll(".task-text-input");
+            if (currentInputs.length > 0 && currentInputs[index - 1]) {
+              const prevInput = currentInputs[index - 1];
+              prevInput.focus();
+              prevInput.setSelectionRange(
+                prevInput.value.length,
+                prevInput.value.length,
+              );
+            }
           }
         }
       }
-    }
-  };
+    };
 
-  taskListEl.onclick = (e) => {
-    if (e.target.tagName === "INPUT" && e.target.type === "checkbox") {
-      const index = e.target.dataset.index;
-      tasks[index].completed = e.target.checked;
-      renderTasks();
-    } else if (e.target.classList.contains("delete-task")) {
-      const index = e.target.dataset.index;
-      tasks.splice(index, 1);
-      renderTasks();
-    }
-  };
-
-  clearAllBtn.onclick = () => {
-    if (
-      tasks.length > 0 &&
-      confirm("Are you sure you want to clear all tasks?")
-    ) {
-      tasks = [
-        { text: "", completed: false },
-        { text: "", completed: false },
-        { text: "", completed: false },
-      ];
-      renderTasks();
-    }
-  };
+    taskListEl.onclick = (e) => {
+      if (e.target.tagName === "INPUT" && e.target.type === "checkbox") {
+        const index = e.target.dataset.index;
+        tasks[index].completed = e.target.checked;
+        renderTasks();
+      } else if (e.target.classList.contains("delete-task")) {
+        const index = e.target.dataset.index;
+        tasks.splice(index, 1);
+        renderTasks();
+      }
+    };
+  }
 
   // Initial Render execution
   renderTasks();
@@ -1914,32 +2055,154 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // Load all settings from localStorage
-  preferredBreakSelect.value = preferredBreak;
-  autoSwitchCheckbox.checked = autoSwitch;
-  pomodoroInput.value = pomodoroDuration;
-  shortInput.value = shortBreakDuration;
-  longInput.value = longBreakDuration;
+  if (preferredBreakSelect) preferredBreakSelect.value = preferredBreak;
+  if (autoSwitchCheckbox) autoSwitchCheckbox.checked = autoSwitch;
+  if (pomodoroInput) pomodoroInput.value = pomodoroDuration;
+  if (shortInput) shortInput.value = shortBreakDuration;
+  if (longInput) longInput.value = longBreakDuration;
 
   // Update the mode buttons with saved durations
-  document.querySelector('[data-mode=\"pomodoro\"]').dataset.time =
-    pomodoroDuration * 60;
-  document.querySelector('[data-mode=\"short\"]').dataset.time =
-    shortBreakDuration * 60;
-  document.querySelector('[data-mode=\"long\"]').dataset.time =
-    longBreakDuration * 60;
+  const pomodoroBtn = document.querySelector('[data-mode="pomodoro"]');
+  const shortBtn = document.querySelector('[data-mode="short"]');
+  const longBtn = document.querySelector('[data-mode="long"]');
+  
+  if (pomodoroBtn) pomodoroBtn.dataset.time = pomodoroDuration * 60;
+  if (shortBtn) shortBtn.dataset.time = shortBreakDuration * 60;
+  if (longBtn) longBtn.dataset.time = longBreakDuration * 60;
 
   // Update time display if not running
   if (!isRunning) {
-    timeLeft = parseInt(
-      document.querySelector(".mode-btn.active").dataset.time,
-    );
-    updateDisplay();
+    const activeModeBtn = document.querySelector(".mode-btn.active");
+    if (activeModeBtn && activeModeBtn.dataset.time) {
+      timeLeft = parseInt(activeModeBtn.dataset.time);
+      updateDisplay();
+    }
   }
 
   // --- Ambient Mixer Logic ---
+  // Ambient page button functionality
+  const ambientPageBtns = document.querySelectorAll(".ambient-page-btn");
+  const ambientGrids = document.querySelectorAll(".ambient-grid");
+
+  ambientPageBtns.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const pageNum = btn.dataset.page;
+      
+      // Update active button state
+      ambientPageBtns.forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      
+      // Show/hide corresponding grid
+      ambientGrids.forEach((grid) => {
+        if (grid.dataset.page === pageNum) {
+          grid.style.display = "grid";
+        } else {
+          grid.style.display = "none";
+        }
+      });
+    });
+  });
+
+  // --- Ambient Sound Caching ---
+  
+  async function cacheAmbientSounds() {
+    const ambientItems = document.querySelectorAll(".ambient-item");
+    
+    for (const item of ambientItems) {
+      const audio = item.querySelector("audio");
+      if (!audio || !audio.src) continue;
+      
+      const soundName = item.querySelector(".ambient-text").textContent.toLowerCase();
+      const cacheKey = `ambient_${soundName}`;
+      
+      // Check if already cached
+      try {
+        const db = await getDB();
+        const tx = db.transaction(ambientStoreName, "readonly");
+        const store = tx.objectStore(ambientStoreName);
+        const cached = await new Promise((resolve, reject) => {
+          const req = store.get(cacheKey);
+          req.onsuccess = () => resolve(req.result);
+          req.onerror = () => reject(req.error);
+        });
+        
+        if (cached) {
+          // Use cached blob URL
+          audio.src = URL.createObjectURL(cached.blob);
+          continue;
+        }
+        
+        // Fetch and cache the sound
+        const response = await fetch(audio.src);
+        const blob = await response.blob();
+        
+        const saveTx = db.transaction(ambientStoreName, "readwrite");
+        const saveStore = saveTx.objectStore(ambientStoreName);
+        saveStore.put({
+          id: cacheKey,
+          blob: blob,
+          cachedAt: Date.now()
+        });
+        
+        await new Promise((resolve, reject) => {
+          saveTx.oncomplete = () => resolve();
+          saveTx.onerror = () => reject(saveTx.error);
+        });
+        
+        // Update audio source to use cached blob
+        audio.src = URL.createObjectURL(blob);
+      } catch (error) {
+        console.error(`Error caching ambient sound ${soundName}:`, error);
+      }
+    }
+  }
+  
+  // Initialize ambient sound caching
+  cacheAmbientSounds();
+
+  // Handle page 1 ambient items (old layout)
   const ambientItems = document.querySelectorAll(".ambient-item");
 
   ambientItems.forEach((item) => {
+    const slider = item.querySelector(".ambient-slider");
+    const audio = item.querySelector("audio");
+
+    item.addEventListener("click", (e) => {
+      // Prevent toggling if the user is clicking/dragging the slider
+      if (e.target === slider) return;
+
+      item.classList.toggle("active");
+
+      if (item.classList.contains("active")) {
+        // Play audio and set volume to slider's current value
+        if (audio) {
+          audio.volume = slider.value;
+          audio
+            .play()
+            .catch((err) =>
+              console.log("Audio requires actual file source to play.", err),
+            );
+        }
+      } else {
+        // Stop audio
+        if (audio) {
+          audio.pause();
+        }
+      }
+    });
+
+    // Update volume live as the slider moves
+    slider.addEventListener("input", (e) => {
+      if (audio) {
+        audio.volume = e.target.value;
+      }
+    });
+  });
+
+  // Handle page 2 frequency items (new brainwave layout)
+  const frequencyItems = document.querySelectorAll(".frequency-item");
+
+  frequencyItems.forEach((item) => {
     const slider = item.querySelector(".ambient-slider");
     const audio = item.querySelector("audio");
 

@@ -223,21 +223,27 @@ function findTheaterButtonFast() {
     return cachedTheaterButton;
   }
   
+  // Try multiple selectors for the theater button
   const selectors = [
+    '.ytp-size-button.ytp-button',
+    '.ytp-size-button',
+    'button.ytp-size-button',
+    '.html5-video-player .ytp-size-button',
     'button[aria-label="Theater mode"]',
-    'button[title="Theater mode"]',
-    '.ytp-theater-button'
+    'button[data-tooltip-title="Theater mode"]'
   ];
   
   for (const selector of selectors) {
     const btn = document.querySelector(selector);
     if (btn) {
+      console.log(`Found theater button with selector: ${selector}`);
       cachedTheaterButton = btn;
       lastButtonFindTime = now;
       return btn;
     }
   }
   
+  console.log("Theater button not found with any selector");
   cachedTheaterButton = null;
   return null;
 }
@@ -257,36 +263,15 @@ function setTheaterModeInstant(enable) {
     return true;
   }
   
+  // Only use the native YouTube button click method
   const theaterButton = findTheaterButtonFast();
   if (theaterButton) {
     theaterButton.click();
     return true;
   }
   
-  const watchFlexy = document.querySelector('ytd-watch-flexy');
-  if (watchFlexy) {
-    if (enable) {
-      watchFlexy.setAttribute('theater', '');
-    } else {
-      watchFlexy.removeAttribute('theater');
-    }
-    
-    const player = document.querySelector('.html5-video-player');
-    if (player) {
-      if (enable) {
-        player.classList.add('ytp-theater-mode');
-      } else {
-        player.classList.remove('ytp-theater-mode');
-      }
-    }
-    
-    watchFlexy.style.display = 'none';
-    watchFlexy.offsetHeight;
-    watchFlexy.style.display = '';
-    
-    return true;
-  }
-  
+  // If button not found, don't force theater mode with DOM manipulation
+  console.log("Theater button not found, skipping theater mode activation");
   return false;
 }
 
@@ -363,7 +348,9 @@ function handleVideoFeed() {
       feed.style.display = 'none';
     }
   } else if (settings.sidebar && settings.hideFeedMode === "hide") {
-    enableHideMode(feed);
+    if (feed) {
+      enableHideMode(feed);
+    }
   } else {
     if (isRemoveModeActive || feedOriginalDisplay !== null) {
       disableAllModes(feed);
@@ -372,26 +359,48 @@ function handleVideoFeed() {
 }
 
 function enableRemoveMode(feed) {
-  saveOriginalTheaterState();
+  // Save original theater state when first enabling
+  if (!isRemoveModeActive) {
+    saveOriginalTheaterState();
+  }
   
+  // Step 1: Enable theater mode using native YouTube button click only
+  const theaterButton = findTheaterButtonFast();
+  console.log("Theater button found:", !!theaterButton);
+  
+  if (theaterButton) {
+    const isCurrentlyTheater = isTheaterModeActive();
+    console.log("Currently in theater mode:", isCurrentlyTheater);
+    
+    if (!isCurrentlyTheater) {
+      console.log("Clicking theater button...");
+      theaterButton.click();
+      console.log("Theater button clicked");
+    }
+  } else {
+    console.log("Theater button not found, cannot enable theater mode");
+  }
+  
+  // Step 2: Hide the video feed using visibility/opacity instead of display:none
+  // This prevents the video from turning black
   if (feed) {
     if (feedOriginalDisplay === null) {
       storeFeedDisplay(feed);
     }
-    feed.style.display = 'none';
     
-    // Fix #4: Use cached getter for secondary columns
-    const secondaryColumns = getSecondaryColumns();
-    for (const col of secondaryColumns) {
-      if (col !== feed && !col.closest('#primary')) {
-        col.style.display = 'none';
-      }
+    // Ensure display is not none before hiding
+    if (feed.style.display === 'none') {
+      feed.style.display = feedOriginalDisplay || 'block';
     }
+    
+    // Use visibility and opacity instead of display:none
+    feed.style.visibility = 'hidden';
+    feed.style.opacity = '0';
+    feed.style.pointerEvents = 'none';
   }
   
-  setTheaterModeInstant(true);
   isRemoveModeActive = true;
-  console.log("Remove mode enabled instantly");
+  console.log("Remove mode enabled");
 }
 
 function enableHideMode(feed) {
@@ -406,13 +415,10 @@ function enableHideMode(feed) {
     storeFeedDisplay(feed);
   }
   
-  if (feed.style.display === 'none') {
-    feed.style.display = feedOriginalDisplay;
-  }
+  // Use display:none for hide mode (can cause black screen but user wants this behavior)
+  feed.style.display = 'none';
   
-  feed.style.visibility = 'hidden';
-  feed.style.opacity = '0';
-  feed.style.pointerEvents = 'none';
+  console.log("Hide mode enabled");
 }
 
 function disableAllModes(feed) {
@@ -423,20 +429,13 @@ function disableAllModes(feed) {
     feed.style.pointerEvents = '';
   }
   
-  // Fix #4: Use cached getter for secondary columns
-  const secondaryColumns = getSecondaryColumns();
-  for (const col of secondaryColumns) {
-    if (col !== feed && !col.closest('#primary')) {
-      col.style.display = '';
-    }
-  }
-  
   if (isRemoveModeActive) {
     restoreOriginalTheaterState();
   }
   
   isRemoveModeActive = false;
   feedOriginalDisplay = null;
+  console.log("All modes disabled");
 }
 
 // ============ COMMENTS HANDLING (Fix #6) ============

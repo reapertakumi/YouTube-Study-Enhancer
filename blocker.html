@@ -8,6 +8,12 @@
 </head>
 <body>
 
+    <!-- Loading Screen -->
+    <div id="loading-screen" class="loading-screen">
+        <div class="loading-spinner"></div>
+        <p class="loading-text">Initializing...</p>
+    </div>
+
     <button id="settings-btn" class="icon-btn settings-rotate" title="Background Settings" style="position: fixed; top: 20px; right: 20px; z-index: 1001; background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 50%; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.3s ease;">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l-.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06-.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06-.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
     </button>
@@ -75,7 +81,11 @@
             </button>
             
             <div class="music-tab" data-tab="1">
-                <div class="ambient-grid">
+                <div class="ambient-page-buttons">
+                    <button class="ambient-page-btn active" data-page="1">1</button>
+                    <button class="ambient-page-btn" data-page="2">2</button>
+                </div>
+                <div class="ambient-grid" data-page="1">
                     <div class="ambient-item">
                         <div class="ambient-inner"><span class="ambient-icon">🌧️</span><span class="ambient-text">Rain</span></div>
                         <input type="range" class="ambient-slider" min="0" max="1" step="0.01" value="0.25">
@@ -135,6 +145,197 @@
                         <div class="ambient-inner"><span class="ambient-icon">🌸</span><span class="ambient-text">Pink</span></div>
                         <input type="range" class="ambient-slider" min="0" max="1" step="0.01" value="0.25">
                         <audio loop preload="none" src="https://raw.githubusercontent.com/reapertakumi/YouTube-Study-Enhancer/main/sounds/pink-noise.mp3"></audio>
+                    </div>
+                </div>
+                <div class="ambient-grid" data-page="2" style="display: none;">
+                    <div class="brainwave-category">
+                        <div class="category-header">
+                            <span class="category-icon">🌙</span>
+                            <span class="category-title">Theta Beats (4-8 Hz)</span>
+                            <span class="category-desc">Deep meditation, creativity</span>
+                        </div>
+                        <div class="frequency-list">
+                            <div class="frequency-item">
+                                <div class="freq-info">
+                                    <span class="freq-name">4 Hz</span>
+                                    <span class="freq-benefit">Deep meditation, REM sleep</span>
+                                </div>
+                                <div class="freq-controls">
+                                    <input type="range" class="ambient-slider" min="0" max="1" step="0.01" value="0.25">
+                                    <audio loop preload="none" src="https://raw.githubusercontent.com/reapertakumi/YouTube-Study-Enhancer/main/sounds/waves/theta_4hz.wav"></audio>
+                                </div>
+                            </div>
+                            <div class="frequency-item">
+                                <div class="freq-info">
+                                    <span class="freq-name">5 Hz</span>
+                                    <span class="freq-benefit">Creativity, visualization</span>
+                                </div>
+                                <div class="freq-controls">
+                                    <input type="range" class="ambient-slider" min="0" max="1" step="0.01" value="0.25">
+                                    <audio loop preload="none" src="https://raw.githubusercontent.com/reapertakumi/YouTube-Study-Enhancer/main/sounds/waves/theta_5hz.wav"></audio>
+                                </div>
+                            </div>
+                            <div class="frequency-item">
+                                <div class="freq-info">
+                                    <span class="freq-name">6 Hz</span>
+                                    <span class="freq-benefit">Creativity, meditation, REM sleep</span>
+                                </div>
+                                <div class="freq-controls">
+                                    <input type="range" class="ambient-slider" min="0" max="1" step="0.01" value="0.25">
+                                    <audio loop preload="none" src="https://raw.githubusercontent.com/reapertakumi/YouTube-Study-Enhancer/main/sounds/waves/theta_6hz.wav"></audio>
+                                </div>
+                            </div>
+                            <div class="frequency-item">
+                                <div class="freq-info">
+                                    <span class="freq-name">7 Hz</span>
+                                    <span class="freq-benefit">Deep relaxation, visualization</span>
+                                </div>
+                                <div class="freq-controls">
+                                    <input type="range" class="ambient-slider" min="0" max="1" step="0.01" value="0.25">
+                                    <audio loop preload="none" src="https://raw.githubusercontent.com/reapertakumi/YouTube-Study-Enhancer/main/sounds/waves/theta_7hz.wav"></audio>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="brainwave-category">
+                        <div class="category-header">
+                            <span class="category-icon">🧠</span>
+                            <span class="category-title">Alpha Beats (8-12 Hz)</span>
+                            <span class="category-desc">Relaxed awareness, learning, memory</span>
+                        </div>
+                        <div class="frequency-list">
+                            <div class="frequency-item">
+                                <div class="freq-info">
+                                    <span class="freq-name">8 Hz</span>
+                                    <span class="freq-benefit">Deep relaxation, meditation</span>
+                                </div>
+                                <div class="freq-controls">
+                                    <input type="range" class="ambient-slider" min="0" max="1" step="0.01" value="0.25">
+                                    <audio loop preload="none" src="https://raw.githubusercontent.com/reapertakumi/YouTube-Study-Enhancer/main/sounds/waves/alpha_8hz.wav"></audio>
+                                </div>
+                            </div>
+                            <div class="frequency-item">
+                                <div class="freq-info">
+                                    <span class="freq-name">9 Hz</span>
+                                    <span class="freq-benefit">Relaxed focus, stress relief</span>
+                                </div>
+                                <div class="freq-controls">
+                                    <input type="range" class="ambient-slider" min="0" max="1" step="0.01" value="0.25">
+                                    <audio loop preload="none" src="https://raw.githubusercontent.com/reapertakumi/YouTube-Study-Enhancer/main/sounds/waves/alpha_9hz.wav"></audio>
+                                </div>
+                            </div>
+                            <div class="frequency-item">
+                                <div class="freq-info">
+                                    <span class="freq-name">10 Hz</span>
+                                    <span class="freq-benefit">Focus, stress relief, creativity</span>
+                                </div>
+                                <div class="freq-controls">
+                                    <input type="range" class="ambient-slider" min="0" max="1" step="0.01" value="0.25">
+                                    <audio loop preload="none" src="https://raw.githubusercontent.com/reapertakumi/YouTube-Study-Enhancer/main/sounds/waves/alpha_10hz.wav"></audio>
+                                </div>
+                            </div>
+                            <div class="frequency-item">
+                                <div class="freq-info">
+                                    <span class="freq-name">11 Hz</span>
+                                    <span class="freq-benefit">Mental clarity, calm alertness</span>
+                                </div>
+                                <div class="freq-controls">
+                                    <input type="range" class="ambient-slider" min="0" max="1" step="0.01" value="0.25">
+                                    <audio loop preload="none" src="https://raw.githubusercontent.com/reapertakumi/YouTube-Study-Enhancer/main/sounds/waves/alpha_11hz.wav"></audio>
+                                </div>
+                            </div>
+                            <div class="frequency-item">
+                                <div class="freq-info">
+                                    <span class="freq-name">12 Hz</span>
+                                    <span class="freq-benefit">Mental awareness, calm focus</span>
+                                </div>
+                                <div class="freq-controls">
+                                    <input type="range" class="ambient-slider" min="0" max="1" step="0.01" value="0.25">
+                                    <audio loop preload="none" src="https://raw.githubusercontent.com/reapertakumi/YouTube-Study-Enhancer/main/sounds/waves/alpha_12hz.wav"></audio>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="brainwave-category">
+                        <div class="category-header">
+                            <span class="category-icon">⚡</span>
+                            <span class="category-title">Beta Beats (13-30 Hz)</span>
+                            <span class="category-desc">Active focus, analytical thinking</span>
+                        </div>
+                        <div class="frequency-list">
+                            <div class="frequency-item">
+                                <div class="freq-info">
+                                    <span class="freq-name">16 Hz</span>
+                                    <span class="freq-benefit">Sustained attention, reasoning</span>
+                                </div>
+                                <div class="freq-controls">
+                                    <input type="range" class="ambient-slider" min="0" max="1" step="0.01" value="0.25">
+                                    <audio loop preload="none" src="https://raw.githubusercontent.com/reapertakumi/YouTube-Study-Enhancer/main/sounds/waves/beta_16hz.wav"></audio>
+                                </div>
+                            </div>
+                            <div class="frequency-item">
+                                <div class="freq-info">
+                                    <span class="freq-name">20 Hz</span>
+                                    <span class="freq-benefit">High-level cognitive processing</span>
+                                </div>
+                                <div class="freq-controls">
+                                    <input type="range" class="ambient-slider" min="0" max="1" step="0.01" value="0.25">
+                                    <audio loop preload="none" src="https://raw.githubusercontent.com/reapertakumi/YouTube-Study-Enhancer/main/sounds/waves/beta_20hz.wav"></audio>
+                                </div>
+                            </div>
+                            <div class="frequency-item">
+                                <div class="freq-info">
+                                    <span class="freq-name">24 Hz</span>
+                                    <span class="freq-benefit">Peak performance, alertness</span>
+                                </div>
+                                <div class="freq-controls">
+                                    <input type="range" class="ambient-slider" min="0" max="1" step="0.01" value="0.25">
+                                    <audio loop preload="none" src="https://raw.githubusercontent.com/reapertakumi/YouTube-Study-Enhancer/main/sounds/waves/beta_24hz.wav"></audio>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="brainwave-category">
+                        <div class="category-header">
+                            <span class="category-icon">🌟</span>
+                            <span class="category-title">Gamma Beats (30-100 Hz)</span>
+                            <span class="category-desc">Peak performance, inspiration</span>
+                        </div>
+                        <div class="frequency-list">
+                            <div class="frequency-item">
+                                <div class="freq-info">
+                                    <span class="freq-name">35 Hz</span>
+                                    <span class="freq-benefit">High-level processing, focus</span>
+                                </div>
+                                <div class="freq-controls">
+                                    <input type="range" class="ambient-slider" min="0" max="1" step="0.01" value="0.25">
+                                    <audio loop preload="none" src="https://raw.githubusercontent.com/reapertakumi/YouTube-Study-Enhancer/main/sounds/waves/gamma_35hz.wav"></audio>
+                                </div>
+                            </div>
+                            <div class="frequency-item">
+                                <div class="freq-info">
+                                    <span class="freq-name">40 Hz</span>
+                                    <span class="freq-benefit">High-level processing, learning</span>
+                                </div>
+                                <div class="freq-controls">
+                                    <input type="range" class="ambient-slider" min="0" max="1" step="0.01" value="0.25">
+                                    <audio loop preload="none" src="https://raw.githubusercontent.com/reapertakumi/YouTube-Study-Enhancer/main/sounds/waves/gamma_40hz.wav"></audio>
+                                </div>
+                            </div>
+                            <div class="frequency-item">
+                                <div class="freq-info">
+                                    <span class="freq-name">45 Hz</span>
+                                    <span class="freq-benefit">Peak attention, cognitive binding</span>
+                                </div>
+                                <div class="freq-controls">
+                                    <input type="range" class="ambient-slider" min="0" max="1" step="0.01" value="0.25">
+                                    <audio loop preload="none" src="https://raw.githubusercontent.com/reapertakumi/YouTube-Study-Enhancer/main/sounds/waves/gamma_45hz.wav"></audio>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -239,13 +440,48 @@
     </section>
 
     <div id="settings-modal" class="modal">
-        <div class="modal-content">
-            <h3>Choose Background</h3>
-            <div id="bg-gallery" class="gallery">
-                <div class="bg-option upload-btn" id="upload-trigger" title="Upload your own image">+</div>
+        <div class="modal-content bg-modal-content">
+            <div class="modal-header">
+                <h3>Background Settings</h3>
+                <button class="modal-close-btn" id="close-modal-btn">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
             </div>
-            <input type="file" id="bg-uploader" accept="image/*" style="display: none;">
-            
+
+            <div class="bg-preview-section">
+                <div class="bg-preview-container">
+                    <div class="bg-preview-image" id="bg-preview"></div>
+                    <div class="bg-preview-overlay">
+                        <span class="bg-preview-label">Current Background</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-tabs">
+                <button class="bg-tab active" data-tab="built-in">Built-in</button>
+                <button class="bg-tab" data-tab="custom">Custom</button>
+                <button class="bg-tab" data-tab="upload">Upload</button>
+            </div>
+
+            <div class="bg-tab-content" id="built-in-tab">
+                <div id="bg-gallery" class="bg-gallery"></div>
+            </div>
+
+            <div class="bg-tab-content" id="custom-tab" style="display: none;">
+                <div id="custom-bg-gallery" class="bg-gallery"></div>
+            </div>
+
+            <div class="bg-tab-content" id="upload-tab" style="display: none;">
+                <div class="upload-area" id="upload-area">
+                    <div class="upload-icon">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    </div>
+                    <p class="upload-text">Drag & drop your image here</p>
+                    <p class="upload-subtext">or click to browse</p>
+                    <input type="file" id="bg-uploader" accept="image/*" style="display: none;">
+                </div>
+            </div>
+
             <div class="settings-toggles">
                 <label class="toggle-option">
                     <input type="checkbox" id="enable-quotes" checked>
@@ -256,8 +492,6 @@
                     <span class="toggle-label">Show Shortcuts</span>
                 </label>
             </div>
-            
-            <button id="close-modal-btn" class="close-modal-btn">Close</button>
         </div>
     </div>
 

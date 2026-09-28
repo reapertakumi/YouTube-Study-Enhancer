@@ -65,28 +65,39 @@ document.addEventListener("DOMContentLoaded", () => {
     }, 100);
   });
   
-  storage.sync.get([...allIds, "hideFeedMode", "theme", "youtubeCollapsed", "blockCollapsed", "fontFamily", "themePreset", "particlesEnabled"], (data) => {
+  storage.sync.get([...allIds, "hideFeedMode", "theme", "youtubeCollapsed", "blockCollapsed", "fontFamily", "themePreset", "particlesEnabled", "schedule"], (data) => {
     console.log("Loaded settings:", data);
-    
+
     allIds.forEach(id => {
       const element = document.getElementById(id);
       if (element) {
         element.checked = data[id] === true;
       }
     });
-    
+
     const savedFont = data.fontFamily || 'system-ui';
     applyFontToPopup(savedFont);
-    
+
     const savedPreset = data.themePreset || 'default';
     applyThemePreset(savedPreset);
-    
+
     if (data.particlesEnabled === true && savedPreset === 'sakura') {
       startSakuraParticles();
     }
     if (data.particlesEnabled === true && savedPreset === 'winter') {
       startWinterParticles();
     }
+
+    // Initialize schedule
+    if (data.schedule && data.schedule.enabled) {
+      scheduleData = { ...scheduleData, ...data.schedule };
+      updateScheduleStatus();
+      updateCardStates();
+      startScheduleCheck();
+    }
+
+    // Initialize schedule day buttons
+    initScheduleDayButtons();
     
     const youtubeContent = document.getElementById('youtubeContent');
     const blockContent = document.getElementById('blockContent');
@@ -650,18 +661,19 @@ function loadDefaultSites() {
     const removedSites = data[REMOVED_SITES_KEY] || [];
     const container = document.getElementById('defaultSitesContainer');
     if (!container) return;
-    
+
     container.innerHTML = '';
-    
+
     DEFAULT_BLOCK_SITES.forEach(site => {
       if (removedSites.includes(site.id)) return;
-      
+
       const card = createDefaultSiteCard(site, data[site.id] === true);
       container.appendChild(card);
     });
-    
+
     setTimeout(() => {
       makeDefaultSitesClickable();
+      updateCardStates(); // Update card states after loading
     }, 50);
   });
 }
@@ -784,6 +796,7 @@ function loadCustomDomains() {
     });
     setTimeout(() => {
       makeCustomDomainsClickable();
+      updateCardStates(); // Update card states after loading
     }, 50);
   });
 }
@@ -1872,6 +1885,396 @@ function normalizeKeyCombo(e) {
   }
 
   return null;
+}
+
+// Schedule Feature
+const openScheduleBtn = document.getElementById('openScheduleBtn');
+const scheduleModal = document.getElementById('scheduleModal');
+const closeScheduleBtn = document.getElementById('closeScheduleBtn');
+const scheduleStartTime = document.getElementById('scheduleStartTime');
+const scheduleEndTime = document.getElementById('scheduleEndTime');
+const toggleScheduleBtn = document.getElementById('toggleScheduleBtn');
+const scheduleStatus = document.getElementById('scheduleStatus');
+const scheduleFeaturesList = document.getElementById('scheduleFeaturesList');
+
+let scheduleData = {
+  enabled: false,
+  active: false, // Whether currently within the scheduled time range
+  startTime: '09:00',
+  endTime: '17:00',
+  days: [1, 2, 3, 4, 5], // Mon-Fri
+  features: []
+};
+
+let scheduleCheckInterval = null;
+
+function openScheduleModal() {
+  // Close settings modal if open
+  const settingsModal = document.getElementById('settingsModal');
+  if (settingsModal) {
+    settingsModal.style.display = 'none';
+  }
+
+  if (scheduleModal) {
+    scheduleModal.style.display = 'flex';
+    loadScheduleData();
+    loadScheduleFeatures();
+  }
+}
+
+function closeScheduleModal() {
+  if (scheduleModal) {
+    scheduleModal.style.display = 'none';
+  }
+}
+
+function loadScheduleData() {
+  storage.sync.get(['schedule'], (data) => {
+    if (data.schedule) {
+      scheduleData = { ...scheduleData, ...data.schedule };
+    }
+    
+    if (scheduleStartTime) scheduleStartTime.value = scheduleData.startTime;
+    if (scheduleEndTime) scheduleEndTime.value = scheduleData.endTime;
+    
+    // Update day buttons
+    const dayButtons = document.querySelectorAll('.schedule-day-btn');
+    dayButtons.forEach(btn => {
+      const day = parseInt(btn.dataset.day);
+      if (scheduleData.days.includes(day)) {
+        btn.classList.add('active');
+      } else {
+        btn.classList.remove('active');
+      }
+    });
+    
+    updateScheduleStatus();
+  });
+}
+
+function loadScheduleFeatures() {
+  if (!scheduleFeaturesList) return;
+
+  scheduleFeaturesList.innerHTML = '';
+
+  // Load custom domains from storage
+  storage.sync.get(['customDomains'], (domainData) => {
+    const customDomains = domainData.customDomains || {};
+    const customDomainFeatures = Object.keys(customDomains).map(domain => ({
+      id: `custom_${domain}`,
+      name: domain,
+      description: `Block ${domain}`,
+      category: 'custom-domains'
+    }));
+
+    // Add category to default block sites
+    const defaultSiteFeatures = DEFAULT_BLOCK_SITES.map(site => ({
+      id: site.id,
+      name: site.name,
+      description: `Block ${site.name}`,
+      category: 'block-sites'
+    }));
+
+    // Add category to YouTube features
+    const youtubeFeatures = availableFeatures.map(feature => ({
+      ...feature,
+      category: 'youtube-features'
+    }));
+
+    // Group features by category
+    const featuresByCategory = {
+      'youtube-features': youtubeFeatures,
+      'block-sites': defaultSiteFeatures,
+      'custom-domains': customDomainFeatures
+    };
+
+    const categoryLabels = {
+      'youtube-features': 'YouTube Features to Block',
+      'block-sites': 'Sites to Block',
+      'custom-domains': 'Custom Domains'
+    };
+
+    // Render each category
+    Object.keys(featuresByCategory).forEach(category => {
+      const features = featuresByCategory[category];
+      if (features.length === 0) return;
+
+      // Add category header
+      const categoryHeader = document.createElement('div');
+      categoryHeader.className = 'schedule-category-header';
+      categoryHeader.textContent = categoryLabels[category];
+      scheduleFeaturesList.appendChild(categoryHeader);
+
+      // Add features in this category
+      features.forEach(feature => {
+        const item = document.createElement('div');
+        item.className = 'schedule-feature-item';
+        if (scheduleData.features.includes(feature.id)) {
+          item.classList.add('selected');
+        }
+
+        item.innerHTML = `
+          <span>${feature.name}</span>
+          <div class="schedule-feature-checkbox"></div>
+        `;
+
+        item.addEventListener('click', () => {
+          const index = scheduleData.features.indexOf(feature.id);
+          if (index > -1) {
+            scheduleData.features.splice(index, 1);
+            item.classList.remove('selected');
+          } else {
+            scheduleData.features.push(feature.id);
+            item.classList.add('selected');
+          }
+          saveScheduleData();
+        });
+
+        scheduleFeaturesList.appendChild(item);
+      });
+    });
+  });
+}
+
+function saveScheduleData() {
+  storage.sync.set({ schedule: scheduleData });
+}
+
+function updateScheduleStatus() {
+  if (!scheduleStatus) return;
+  
+  if (scheduleData.enabled) {
+    scheduleStatus.textContent = 'Active';
+    scheduleStatus.className = 'schedule-status-value active';
+    if (toggleScheduleBtn) {
+      toggleScheduleBtn.textContent = 'Disable Schedule';
+      toggleScheduleBtn.classList.add('active');
+    }
+  } else {
+    scheduleStatus.textContent = 'Inactive';
+    scheduleStatus.className = 'schedule-status-value inactive';
+    if (toggleScheduleBtn) {
+      toggleScheduleBtn.textContent = 'Enable Schedule';
+      toggleScheduleBtn.classList.remove('active');
+    }
+  }
+}
+
+function toggleSchedule() {
+  scheduleData.enabled = !scheduleData.enabled;
+  scheduleData.active = false; // Reset active state when toggling
+  saveScheduleData();
+  updateScheduleStatus();
+
+  if (scheduleData.enabled) {
+    // Don't apply features yet - wait for start time
+    startScheduleCheck();
+  } else {
+    disableScheduleFeatures();
+    stopScheduleCheck();
+  }
+}
+
+function applyScheduleFeatures() {
+  // Save current settings before applying schedule
+  storage.sync.get([...allIds, 'customDomains'], (data) => {
+    const currentSettings = {};
+    allIds.forEach(id => {
+      currentSettings[id] = data[id] === true;
+    });
+    currentSettings.customDomains = data.customDomains || {};
+    storage.sync.set({ preScheduleSettings: currentSettings });
+
+    // Apply schedule features for regular IDs
+    const newSettings = {};
+    allIds.forEach(id => {
+      newSettings[id] = scheduleData.features.includes(id);
+    });
+
+    // Apply schedule features for custom domains
+    const newCustomDomains = {};
+    Object.keys(data.customDomains || {}).forEach(domain => {
+      const featureId = `custom_${domain}`;
+      newCustomDomains[domain] = scheduleData.features.includes(featureId);
+    });
+
+    storage.sync.set({ ...newSettings, customDomains: newCustomDomains }, () => {
+      applyAllFeatures();
+      // Delay card state update to ensure DOM is ready and loaded
+      setTimeout(() => updateCardStates(), 500);
+    });
+  });
+}
+
+function disableScheduleFeatures() {
+  // Restore pre-schedule settings
+  storage.sync.get(['preScheduleSettings'], (data) => {
+    if (data.preScheduleSettings) {
+      storage.sync.set(data.preScheduleSettings, () => {
+        applyAllFeatures();
+        updateCardStates();
+      });
+    }
+  });
+}
+
+function updateCardStates() {
+  // Update all cards including YouTube features and block sites
+  const allCards = document.querySelectorAll('.card');
+  console.log('updateCardStates: Found', allCards.length, 'cards, active:', scheduleData.active);
+  allCards.forEach(card => {
+    if (scheduleData.active) {
+      card.classList.add('schedule-disabled');
+    } else {
+      card.classList.remove('schedule-disabled');
+    }
+  });
+}
+
+function updateScheduleStatus() {
+  if (!scheduleStatus) return;
+
+  if (scheduleData.enabled) {
+    if (scheduleData.active) {
+      scheduleStatus.textContent = 'Active';
+      scheduleStatus.className = 'schedule-status-value active';
+    } else {
+      scheduleStatus.textContent = 'Pending';
+      scheduleStatus.className = 'schedule-status-value';
+      scheduleStatus.style.color = '#fbbf24'; // Yellow for pending
+    }
+    if (toggleScheduleBtn) {
+      toggleScheduleBtn.textContent = 'Disable Schedule';
+      toggleScheduleBtn.classList.add('active');
+    }
+  } else {
+    scheduleStatus.textContent = 'Inactive';
+    scheduleStatus.className = 'schedule-status-value inactive';
+    scheduleStatus.style.color = '';
+    if (toggleScheduleBtn) {
+      toggleScheduleBtn.textContent = 'Enable Schedule';
+      toggleScheduleBtn.classList.remove('active');
+    }
+  }
+}
+
+function startScheduleCheck() {
+  if (scheduleCheckInterval) {
+    clearInterval(scheduleCheckInterval);
+  }
+
+  scheduleCheckInterval = setInterval(() => {
+    if (!scheduleData.enabled) return;
+
+    const now = new Date();
+    const currentDay = now.getDay();
+    const currentTime = now.getHours() * 60 + now.getMinutes();
+
+    const [startHours, startMins] = scheduleData.startTime.split(':').map(Number);
+    const [endHours, endMins] = scheduleData.endTime.split(':').map(Number);
+
+    const startTotalMinutes = startHours * 60 + startMins;
+    const endTotalMinutes = endHours * 60 + endMins;
+
+    const isWithinTime = currentTime >= startTotalMinutes && currentTime < endTotalMinutes;
+    const isCorrectDay = scheduleData.days.includes(currentDay);
+
+    console.log('Schedule check:', {
+      currentTime: `${now.getHours()}:${now.getMinutes()}`,
+      scheduleTime: `${scheduleData.startTime} - ${scheduleData.endTime}`,
+      isWithinTime,
+      isCorrectDay,
+      currentDay,
+      scheduledDays: scheduleData.days,
+      wasActive: scheduleData.active
+    });
+
+    if (isWithinTime && isCorrectDay && !scheduleData.active) {
+      // Start time reached - activate schedule
+      console.log('Start time reached, activating schedule...');
+      scheduleData.active = true;
+      saveScheduleData();
+      updateScheduleStatus();
+      applyScheduleFeatures();
+    } else if ((!isWithinTime || !isCorrectDay) && scheduleData.active) {
+      // End time reached or wrong day - deactivate schedule
+      console.log('End time reached or wrong day, deactivating schedule...');
+      scheduleData.active = false;
+      saveScheduleData();
+      updateScheduleStatus();
+      disableScheduleFeatures();
+    }
+  }, 1000); // Check every second for instant response
+}
+
+function stopScheduleCheck() {
+  if (scheduleCheckInterval) {
+    clearInterval(scheduleCheckInterval);
+    scheduleCheckInterval = null;
+  }
+}
+
+function applyAllFeatures() {
+  // This function should trigger the content scripts to apply all features
+  // We'll send a message to all tabs to reload settings
+  chrome.tabs.query({}, (tabs) => {
+    tabs.forEach(tab => {
+      if (tab.url && tab.url.includes('youtube.com')) {
+        chrome.tabs.sendMessage(tab.id, { action: 'reloadSettings' });
+      }
+    });
+  });
+}
+
+// Schedule event listeners
+if (openScheduleBtn) {
+  openScheduleBtn.addEventListener('click', openScheduleModal);
+}
+
+if (closeScheduleBtn) {
+  closeScheduleBtn.addEventListener('click', closeScheduleModal);
+}
+
+if (scheduleModal) {
+  scheduleModal.addEventListener('click', (e) => {
+    if (e.target === scheduleModal) closeScheduleModal();
+  });
+}
+
+if (scheduleStartTime) {
+  scheduleStartTime.addEventListener('change', (e) => {
+    scheduleData.startTime = e.target.value;
+    saveScheduleData();
+  });
+}
+
+if (scheduleEndTime) {
+  scheduleEndTime.addEventListener('change', (e) => {
+    scheduleData.endTime = e.target.value;
+    saveScheduleData();
+  });
+}
+
+// Day button event listeners - moved to after DOM is loaded
+function initScheduleDayButtons() {
+  document.querySelectorAll('.schedule-day-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const day = parseInt(btn.dataset.day);
+      const index = scheduleData.days.indexOf(day);
+      if (index > -1) {
+        scheduleData.days.splice(index, 1);
+        btn.classList.remove('active');
+      } else {
+        scheduleData.days.push(day);
+        btn.classList.add('active');
+      }
+      saveScheduleData();
+    });
+  });
+}
+
+if (toggleScheduleBtn) {
+  toggleScheduleBtn.addEventListener('click', toggleSchedule);
 }
 
 // Customize Features Modal
