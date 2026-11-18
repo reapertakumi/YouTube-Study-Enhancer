@@ -1377,7 +1377,7 @@ body.show-tasks .task-list-container {
 #song-title {
     display: -webkit-box;
     -webkit-box-orient: vertical;
-    -webkit-line-clamp: 3;
+    -webkit-line-clamp: 4;
     overflow: hidden;
     font-size: 0.92rem;
     font-weight: 600;
@@ -1394,6 +1394,14 @@ body.show-tasks .task-list-container {
     letter-spacing: 0.09em;
     text-transform: uppercase;
     color: var(--mp-accent);
+}
+
+#song-title .np-artist {
+    display: block;
+    margin-top: 2px;
+    font-size: 0.76rem;
+    font-weight: 500;
+    color: var(--mp-muted);
 }
 
 .upload-music-btn {
@@ -1678,8 +1686,8 @@ body.show-tasks .task-list-container {
     counter-increment: song;
     display: flex;
     align-items: center;
-    gap: 10px;
-    min-height: 38px;
+    gap: 6px;
+    min-height: 42px;
     padding: 6px 6px 6px 8px;
     border-radius: 10px;
     cursor: pointer;
@@ -1693,6 +1701,7 @@ body.show-tasks .task-list-container {
     content: counter(song);
     flex-shrink: 0;
     width: 20px;
+    margin-right: 4px;
     text-align: center;
     font-size: 0.72rem;
     font-variant-numeric: tabular-nums;
@@ -1720,9 +1729,83 @@ body.show-tasks .task-list-container {
 .song-name {
     flex: 1;
     min-width: 0;
+    display: flex;
+    flex-direction: column;
+    line-height: 1.25;
+}
+
+.song-title-text,
+.song-artist {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.song-artist {
+    font-size: 0.7rem;
+    color: var(--mp-faint);
+}
+
+.song-item.active .song-artist {
+    color: var(--mp-muted);
+}
+
+/* Favorite star: outline on hover, filled + always visible when favorited */
+.favorite-song-btn {
+    flex-shrink: 0;
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: none;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--mp-faint);
+    fill: none;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s ease, color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+
+.favorite-song-btn svg {
+    fill: inherit;
+}
+
+.song-item:hover .favorite-song-btn,
+.favorite-song-btn:focus-visible,
+.favorite-song-btn.active {
+    opacity: 1;
+}
+
+.favorite-song-btn:hover {
+    color: #fcd34d;
+    background: rgba(252, 211, 77, 0.12);
+}
+
+.favorite-song-btn:active {
+    transform: scale(0.85);
+}
+
+.favorite-song-btn.active {
+    color: #fcd34d;
+    fill: #fcd34d;
+}
+
+/* thin divider under the last pinned favorite */
+.song-item.favorite + .song-item:not(.favorite) {
+    margin-top: 5px;
+    position: relative;
+}
+
+.song-item.favorite + .song-item:not(.favorite)::after {
+    content: "";
+    position: absolute;
+    top: -4px;
+    left: 8px;
+    right: 8px;
+    height: 1px;
+    background: var(--mp-line);
 }
 
 .delete-song-btn {

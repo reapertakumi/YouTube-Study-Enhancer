@@ -2327,7 +2327,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // --- GitHub Music Player Logic ---
+  // --- Music Player Logic ---
   const musicAudio = document.getElementById("music-audio");
   const playBtn = document.getElementById("play-btn");
   const forwardBtn = document.getElementById("forward-btn");
@@ -2429,49 +2429,161 @@ document.addEventListener("DOMContentLoaded", () => {
     setRangeFill(musicProgressBar, e.target.value);
   });
 
-  // Fetch music files from GitHub
+  // --- Built-in music (from the music/ folder of the GitHub repo) ---
+  // File names follow "Artist - Title.opus". New files added to the repo show up
+  // automatically. The listing is cached so new tabs don't use up GitHub's
+  // limit of 60 API requests per hour.
+  const MUSIC_LISTING_URL =
+    "https://api.github.com/repos/reapertakumi/YouTube-Study-Enhancer/contents/music";
+  const MUSIC_LISTING_CACHE_KEY = "musicListingCache";
+  const MUSIC_LISTING_MAX_AGE_MS = 12 * 60 * 60 * 1000;
+
+  async function fetchMusicListing() {
+    let cached = null;
+    try {
+      cached = JSON.parse(localStorage.getItem(MUSIC_LISTING_CACHE_KEY));
+    } catch {}
+    if (cached && Date.now() - cached.fetchedAt < MUSIC_LISTING_MAX_AGE_MS) {
+      return cached.files;
+    }
+    try {
+      const response = await fetch(MUSIC_LISTING_URL);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const listing = await response.json();
+      const files = (Array.isArray(listing) ? listing : [])
+        .filter((file) => file.type === "file" && /\.(opus|mp3|ogg|m4a|wav)$/i.test(file.name))
+        .map((file) => ({ name: file.name, url: file.download_url }));
+      localStorage.setItem(
+        MUSIC_LISTING_CACHE_KEY,
+        JSON.stringify({ files, fetchedAt: Date.now() }),
+      );
+      return files;
+    } catch (err) {
+      // Offline or rate-limited: fall back to the last known list
+      console.warn("Could not refresh the music list:", err);
+      return cached ? cached.files : [];
+    }
+  }
+
+  // Old GitHub file names -> new names. Files still uploaded under an old name
+  // are shown with the new name, and history/favorites/removed songs carry over.
+  const RENAMED_MUSIC = {
+    "fassounds - good night lofi cozy chill music.opus": "fassounds - Good Night.opus",
+    "fassounds - study calm peaceful chill hop.opus": "fassounds - Calm Study.opus",
+    "lofi music library - lofi ambient.opus.opus": "Lofi Music Library - Ambient Drift.opus",
+    "lofi music library - lofi coffee ambient.opus": "Lofi Music Library - Coffee Shop.opus",
+    "lofi music library - lofi rain.opus": "Lofi Music Library - Rainy Window.opus",
+    "lofidreams - cozy lofi background music.opus": "LofiDreams - Cozy Corner.opus",
+    "lofidreams - lofi jazz.opus": "LofiDreams - Late Night Jazz.opus",
+    "mondamusic - chill.opus": "Mondamusic - Easy Chill.opus",
+    "mondamusic - girl lofi chill.opus": "Mondamusic - Daydream.opus",
+    "mondamusic - lofi.opus": "Mondamusic - Lofi Breeze.opus",
+    "sonican - jazzy-love.opus": "Sonican - Jazzy Love.opus",
+    "watermello - lofi girl chill.opus": "Watermello - Sunset Chill.opus",
+    "watermello - lofi-chill.opus": "Watermello - Slow Morning.opus",
+  };
+
+  function canonicalMusicName(fileName) {
+    return RENAMED_MUSIC[fileName] || fileName;
+  }
+
+  (function migrateRenamedMusic() {
+    let changed = false;
+    hiddenSongs = hiddenSongs.map((name) => {
+      if (RENAMED_MUSIC[name]) changed = true;
+      return RENAMED_MUSIC[name] || name;
+    });
+    Object.entries(RENAMED_MUSIC).forEach(([oldName, newName]) => {
+      if (oldName in lastPlayedData) {
+        lastPlayedData[newName] = Math.max(lastPlayedData[newName] || 0, lastPlayedData[oldName]);
+        delete lastPlayedData[oldName];
+        changed = true;
+      }
+    });
+    if (changed) {
+      localStorage.setItem("hiddenSongs", JSON.stringify(hiddenSongs));
+      localStorage.setItem("lastPlayed", JSON.stringify(lastPlayedData));
+    }
+  })();
+
+  // "Artist - Title.ext" -> { title, artist }
+  function parseTrackName(fileName) {
+    const base = String(fileName).replace(/\.[a-z0-9]{2,5}$/i, "").trim();
+    const sep = base.indexOf(" - ");
+    if (sep === -1) return { title: base, artist: "" };
+    return { artist: base.slice(0, sep).trim(), title: base.slice(sep + 3).trim() };
+  }
+
+  // --- Favorites (pinned to the top of the library) ---
+  const FAVORITES_KEY = "favoriteSongs";
+  let favoriteSongs;
+  try {
+    favoriteSongs = new Set(JSON.parse(localStorage.getItem(FAVORITES_KEY)) || []);
+  } catch {
+    favoriteSongs = new Set();
+  }
+
+  function trackKey(track) {
+    return track.isUploaded ? track.id : track.originalName;
+  }
+
+  function isFavorite(track) {
+    return favoriteSongs.has(trackKey(track));
+  }
+
+  // Stable: favorites move to the top, everything else keeps its order
+  function pinFavorites(list) {
+    return [...list.filter(isFavorite), ...list.filter((t) => !isFavorite(t))];
+  }
+
+  function toggleFavorite(track) {
+    const key = trackKey(track);
+    if (favoriteSongs.has(key)) favoriteSongs.delete(key);
+    else favoriteSongs.add(key);
+    localStorage.setItem(FAVORITES_KEY, JSON.stringify([...favoriteSongs]));
+
+    const current = musicFiles[currentTrackIndex];
+    musicFiles = pinFavorites(musicFiles);
+    currentTrackIndex = Math.max(0, musicFiles.indexOf(current));
+    populateSongList();
+  }
+
+  // Build the library: built-in songs from GitHub + songs the user uploaded
   async function fetchMusicFiles() {
     try {
-      const response = await fetch(
-        "https://api.github.com/repos/reapertakumi/YouTube-Study-Enhancer/contents/music",
-      );
-      const files = response.ok ? await response.json() : [];
-
-      // Filter for audio files and get their download URLs
-      const githubFiles = files
-        .filter((file) => file.name.endsWith(".opus"))
-        .map((file) => ({
-          name: file.name
-            .replace(/\.opus$/, "")
-            .replace(/-/g, " ")
-            .replace(/_/g, " "),
-          url: file.download_url,
+      const listing = await fetchMusicListing();
+      const bundled = listing
+        .map((file) => ({ file, key: canonicalMusicName(file.name) }))
+        .filter(({ key }) => !hiddenSongs.includes(key))
+        .map(({ file, key }) => ({
+          ...parseTrackName(key),
+          url: file.url,
           isUploaded: false,
-          originalName: file.name,
-          lastPlayed: lastPlayedData[file.name] || 0,
-        }))
-        .filter((file) => !hiddenSongs.includes(file.originalName));
+          originalName: key, // stable key used for history, favorites and hiding
+          lastPlayed: lastPlayedData[key] || 0,
+        }));
 
-      // Load uploaded music files
       const uploadedFiles = await loadUploadedMusic();
-      const uploadedMusic = uploadedFiles.map((file) => ({
-        name: file.name,
-        url: file.url,
-        isUploaded: true,
-        id: file.id,
-        lastPlayed: lastPlayedData[file.id] || 0,
-      }));
+      const uploaded = uploadedFiles.map((file) => {
+        const parsed = parseTrackName(file.name);
+        return {
+          title: parsed.title,
+          artist: parsed.artist || "Your upload",
+          url: file.url,
+          isUploaded: true,
+          id: file.id,
+          lastPlayed: lastPlayedData[file.id] || 0,
+        };
+      });
 
       // Release blob URLs from a previous load before replacing them
       musicFiles.forEach((file) => {
         if (file.isUploaded && file.url) URL.revokeObjectURL(file.url);
       });
 
-      // Combine GitHub and uploaded files
-      musicFiles = [...githubFiles, ...uploadedMusic];
-
-      // Sort by last played (most recent first)
-      musicFiles.sort((a, b) => b.lastPlayed - a.lastPlayed);
+      // Most recently played first, then favorites pinned on top
+      const library = [...bundled, ...uploaded].sort((a, b) => b.lastPlayed - a.lastPlayed);
+      musicFiles = pinFavorites(library);
 
       populateSongList();
       if (musicFiles.length > 0) {
@@ -2480,10 +2592,13 @@ document.addEventListener("DOMContentLoaded", () => {
         songTitle.textContent = "No music yet";
       }
     } catch (error) {
-      console.error("Error fetching music files:", error);
+      console.error("Error loading music:", error);
       songTitle.textContent = "Error loading music";
     }
   }
+
+  const STAR_ICON =
+    '<svg width="15" height="15" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 2.8l2.8 5.7 6.3.9-4.55 4.43 1.07 6.27L12 17.15 6.38 20.1l1.07-6.27L2.9 9.4l6.3-.9z"/></svg>';
 
   function populateSongList() {
     songList.innerHTML = "";
@@ -2495,15 +2610,37 @@ document.addEventListener("DOMContentLoaded", () => {
       songList.appendChild(empty);
     }
     musicFiles.forEach((track, index) => {
+      const favorite = isFavorite(track);
       const songItem = document.createElement("div");
-      songItem.className = "song-item";
-      const nameSpan = document.createElement("span");
-      nameSpan.className = "song-name";
-      nameSpan.textContent = track.name; // file names are untrusted: no innerHTML
-      songItem.appendChild(nameSpan);
+      songItem.className = "song-item" + (favorite ? " favorite" : "");
       songItem.dataset.index = index;
 
-      // Add delete button for all songs
+      // Names come from files: build with textContent, never innerHTML
+      const nameSpan = document.createElement("span");
+      nameSpan.className = "song-name";
+      const titleSpan = document.createElement("span");
+      titleSpan.className = "song-title-text";
+      titleSpan.textContent = track.title;
+      nameSpan.appendChild(titleSpan);
+      if (track.artist) {
+        const artistSpan = document.createElement("span");
+        artistSpan.className = "song-artist";
+        artistSpan.textContent = track.artist;
+        nameSpan.appendChild(artistSpan);
+      }
+      songItem.appendChild(nameSpan);
+
+      const favoriteBtn = document.createElement("button");
+      favoriteBtn.className = "favorite-song-btn" + (favorite ? " active" : "");
+      favoriteBtn.title = favorite ? "Remove from favorites" : "Add to favorites";
+      favoriteBtn.setAttribute("aria-pressed", String(favorite));
+      favoriteBtn.innerHTML = STAR_ICON; // static markup only
+      favoriteBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        toggleFavorite(track);
+      });
+      songItem.appendChild(favoriteBtn);
+
       const deleteBtn = document.createElement("button");
       deleteBtn.className = "delete-song-btn";
       deleteBtn.textContent = "×";
@@ -2513,7 +2650,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (track.isUploaded) {
           deleteUploadedSong(track.id, index);
         } else {
-          hideGitHubSong(track.originalName, index);
+          hideBundledSong(track.originalName, index);
         }
       });
       songItem.appendChild(deleteBtn);
@@ -2533,30 +2670,29 @@ document.addEventListener("DOMContentLoaded", () => {
   async function deleteUploadedSong(id, index) {
     if (confirm("Are you sure you want to remove this song?")) {
       await deleteMusicFile(id);
-      musicFiles.splice(index, 1);
-      if (currentTrackIndex >= musicFiles.length) {
-        currentTrackIndex = Math.max(0, musicFiles.length - 1);
-      }
-      if (currentTrackIndex === index) {
-        loadTrack(currentTrackIndex);
-      }
-      populateSongList();
+      favoriteSongs.delete(id);
+      localStorage.setItem(FAVORITES_KEY, JSON.stringify([...favoriteSongs]));
+      removeTrackAt(index);
     }
   }
 
-  function hideGitHubSong(originalName, index) {
+  function hideBundledSong(originalName, index) {
     if (confirm("Are you sure you want to remove this song?")) {
       hiddenSongs.push(originalName);
       localStorage.setItem("hiddenSongs", JSON.stringify(hiddenSongs));
-      musicFiles.splice(index, 1);
-      if (currentTrackIndex >= musicFiles.length) {
-        currentTrackIndex = Math.max(0, musicFiles.length - 1);
-      }
-      if (currentTrackIndex === index) {
-        loadTrack(currentTrackIndex);
-      }
-      populateSongList();
+      removeTrackAt(index);
     }
+  }
+
+  function removeTrackAt(index) {
+    const wasCurrent = currentTrackIndex === index;
+    musicFiles.splice(index, 1);
+    if (index < currentTrackIndex) currentTrackIndex--;
+    if (currentTrackIndex >= musicFiles.length) {
+      currentTrackIndex = Math.max(0, musicFiles.length - 1);
+    }
+    populateSongList();
+    if (wasCurrent && musicFiles.length > 0) loadTrack(currentTrackIndex);
   }
 
   function updateActiveSong() {
@@ -2580,7 +2716,13 @@ document.addEventListener("DOMContentLoaded", () => {
     const label = document.createElement("span");
     label.className = "currently-playing-label";
     label.textContent = "Currently playing";
-    songTitle.append(label, document.createElement("br"), track.name);
+    songTitle.append(label, document.createElement("br"), track.title);
+    if (track.artist) {
+      const artist = document.createElement("span");
+      artist.className = "np-artist";
+      artist.textContent = track.artist;
+      songTitle.append(artist);
+    }
 
     // Update last played time (used to order the library the next time it loads).
     // The list is NOT re-sorted here: doing so moved the current song to the top,
