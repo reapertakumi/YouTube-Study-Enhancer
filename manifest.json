@@ -1,16 +1,16 @@
 {
   "manifest_version": 3,
   "name": "YouTube Study Enhancer",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "description": "Enhance your Browser studying experience and block distracting sites with our new blocker page",
   "permissions": [
     "storage",
     "scripting",
-    "activeTab",
-    "tabs",
     "contextMenus",
     "downloads",
-    "debugger"
+    "debugger",
+    "alarms",
+    "declarativeNetRequestWithHostAccess"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -57,6 +57,7 @@
     {
       "resources": [
         "blocker.html",
+        "simple_block.html",
         "blocker.css",
         "blocker_ui.js"
       ],

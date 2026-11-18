@@ -38,7 +38,6 @@ const DEFAULT_BLOCK_SITES = [
 const REMOVED_SITES_KEY = "removedDefaultSites";
 
 document.addEventListener("DOMContentLoaded", () => {
-  console.log("Popup loaded - initializing...");
   
   const versionDisplay = document.getElementById('versionDisplay');
   if (versionDisplay) {
@@ -65,8 +64,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }, 100);
   });
   
-  storage.sync.get([...allIds, "hideFeedMode", "theme", "youtubeCollapsed", "blockCollapsed", "fontFamily", "themePreset", "particlesEnabled", "schedule"], (data) => {
-    console.log("Loaded settings:", data);
+  storage.sync.get([...allIds, "hideFeedMode", "theme", "youtubeCollapsed", "blockCollapsed", "fontFamily", "themePreset", "particlesEnabled", "schedule", "scheduleActive", "blockMode"], (data) => {
 
     allIds.forEach(id => {
       const element = document.getElementById(id);
@@ -79,7 +77,19 @@ document.addEventListener("DOMContentLoaded", () => {
     applyFontToPopup(savedFont);
 
     const savedPreset = data.themePreset || 'default';
-    applyThemePreset(savedPreset);
+    applyThemePreset(savedPreset, false);
+
+    const savedBlockMode = data.blockMode || 'home';
+    const homeBlockBtn = document.querySelector('.toggle-option[data-blockmode="home"]');
+    const simpleBlockBtn = document.querySelector('.toggle-option[data-blockmode="simple"]');
+
+    if (savedBlockMode === 'simple') {
+      simpleBlockBtn?.classList.add('active');
+      homeBlockBtn?.classList.remove('active');
+    } else {
+      homeBlockBtn?.classList.add('active');
+      simpleBlockBtn?.classList.remove('active');
+    }
 
     if (data.particlesEnabled === true && savedPreset === 'sakura') {
       startSakuraParticles();
@@ -89,12 +99,13 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // Initialize schedule
-    if (data.schedule && data.schedule.enabled) {
-      scheduleData = { ...scheduleData, ...data.schedule };
-      updateScheduleStatus();
-      updateCardStates();
-      startScheduleCheck();
+    if (data.schedule) {
+      const { active, ...savedSchedule } = data.schedule;
+      scheduleData = { ...scheduleData, ...savedSchedule };
     }
+    scheduleActive = data.scheduleActive === true;
+    updateScheduleStatus();
+    updateCardStates();
 
     // Initialize schedule day buttons
     initScheduleDayButtons();
@@ -147,9 +158,7 @@ document.addEventListener("DOMContentLoaded", () => {
           return;
         }
         const value = e.target.checked;
-        storage.sync.set({ [id]: value }, () => {
-          notifyAllTabs();
-        });
+        storage.sync.set({ [id]: value });
       });
     }
   });
@@ -240,7 +249,22 @@ document.addEventListener("DOMContentLoaded", () => {
   }, 100);
 });
 
+const GOOGLE_FONTS = ['Inter', 'Roboto', 'Open Sans', 'Montserrat', 'Poppins', 'Lato', 'Source Code Pro', 'Fira Code', 'JetBrains Mono'];
+
+// Only the selected Google font is downloaded (the popup used to block on all nine).
+function loadGoogleFont(fontFamily) {
+  if (!GOOGLE_FONTS.includes(fontFamily)) return;
+  const id = 'gfont-' + fontFamily.replace(/\s+/g, '-');
+  if (document.getElementById(id)) return;
+  const link = document.createElement('link');
+  link.id = id;
+  link.rel = 'stylesheet';
+  link.href = 'https://fonts.googleapis.com/css2?family=' + fontFamily.replace(/ /g, '+') + ':wght@400;500;600&display=swap';
+  document.head.appendChild(link);
+}
+
 function applyFontToPopup(fontFamily) {
+  loadGoogleFont(fontFamily);
   document.body.style.fontFamily = fontFamily;
   const elements = document.querySelectorAll('.settings-label, .card span, .section-title span, .version-number, .github-link, button, input, .settings-version-value');
   elements.forEach(el => {
@@ -248,7 +272,7 @@ function applyFontToPopup(fontFamily) {
   });
 }
 
-function applyThemePreset(preset) {
+function applyThemePreset(preset, persist = true) {
   const presetClasses = [
     'theme-default', 'theme-sunset', 'theme-ocean',
     'theme-midnight', 'theme-sakura', 'theme-neon',
@@ -262,8 +286,8 @@ function applyThemePreset(preset) {
     document.body.classList.add(`theme-${preset}`);
   }
   
-  storage.sync.set({ themePreset: preset });
-  
+  if (persist) storage.sync.set({ themePreset: preset });
+
   storage.sync.get(['particlesEnabled'], (data) => {
     const isParticlesEnabled = data.particlesEnabled === true;
     
@@ -374,16 +398,14 @@ function showPasswordModal() {
     }
   };
   
-  passwordInput?.removeEventListener('keypress', handleKeyPress);
-  passwordInput?.addEventListener('keypress', handleKeyPress);
-  
-  const closeOnOutside = (e) => {
-    if (e.target === passwordModal) {
-      passwordModal.style.display = 'none';
-      document.removeEventListener('click', closeOnOutside);
-    }
-  };
-  document.addEventListener('click', closeOnOutside);
+  // Assign (not add) handlers so reopening the modal doesn't stack listeners
+  if (passwordInput) passwordInput.onkeypress = handleKeyPress;
+
+  if (passwordModal) {
+    passwordModal.onclick = (e) => {
+      if (e.target === passwordModal) passwordModal.style.display = 'none';
+    };
+  }
 }
 
 function showSetupPasswordModal() {
@@ -481,20 +503,21 @@ function showSetupPasswordModal() {
     }
   };
   
-  newPasswordInput?.removeEventListener('keypress', handleKeyPress);
-  newPasswordInput?.addEventListener('keypress', handleKeyPress);
-  confirmPasswordInput?.removeEventListener('keypress', handleKeyPress);
-  confirmPasswordInput?.addEventListener('keypress', handleKeyPress);
-  
-  const closeOnOutside = (e) => {
-    if (e.target === changePasswordModal) {
-      changePasswordModal.style.display = 'none';
-      if (currentPasswordInput) currentPasswordInput.style.display = 'block';
-      if (modalHeader) modalHeader.textContent = 'Change Password';
-      document.removeEventListener('click', closeOnOutside);
-    }
-  };
-  document.addEventListener('click', closeOnOutside);
+  // Assign (not add) handlers: the set/change password modals share these inputs,
+  // and stacked listeners let Enter in "Change password" skip the current-password check.
+  if (currentPasswordInput) currentPasswordInput.onkeypress = null;
+  if (newPasswordInput) newPasswordInput.onkeypress = handleKeyPress;
+  if (confirmPasswordInput) confirmPasswordInput.onkeypress = handleKeyPress;
+
+  if (changePasswordModal) {
+    changePasswordModal.onclick = (e) => {
+      if (e.target === changePasswordModal) {
+        changePasswordModal.style.display = 'none';
+        if (currentPasswordInput) currentPasswordInput.style.display = 'block';
+        if (modalHeader) modalHeader.textContent = 'Change Password';
+      }
+    };
+  }
 }
 
 function showChangePasswordModal() {
@@ -552,7 +575,6 @@ function showChangePasswordModal() {
       currentPassword = newPwd;
       storage.sync.set({ customPassword: currentPassword });
       changePasswordModal.style.display = 'none';
-      console.log('Password changed successfully');
     });
   }
   
@@ -590,20 +612,15 @@ function showChangePasswordModal() {
     }
   };
   
-  currentPasswordInput?.removeEventListener('keypress', handleKeyPress);
-  currentPasswordInput?.addEventListener('keypress', handleKeyPress);
-  newPasswordInput?.removeEventListener('keypress', handleKeyPress);
-  newPasswordInput?.addEventListener('keypress', handleKeyPress);
-  confirmPasswordInput?.removeEventListener('keypress', handleKeyPress);
-  confirmPasswordInput?.addEventListener('keypress', handleKeyPress);
-  
-  const closeOnOutside = (e) => {
-    if (e.target === changePasswordModal) {
-      changePasswordModal.style.display = 'none';
-      document.removeEventListener('click', closeOnOutside);
-    }
-  };
-  document.addEventListener('click', closeOnOutside);
+  if (currentPasswordInput) currentPasswordInput.onkeypress = handleKeyPress;
+  if (newPasswordInput) newPasswordInput.onkeypress = handleKeyPress;
+  if (confirmPasswordInput) confirmPasswordInput.onkeypress = handleKeyPress;
+
+  if (changePasswordModal) {
+    changePasswordModal.onclick = (e) => {
+      if (e.target === changePasswordModal) changePasswordModal.style.display = 'none';
+    };
+  }
 }
 
 function setupCollapseHandlers() {
@@ -639,19 +656,6 @@ function setupCollapseHandlers() {
       storage.sync.set({ blockCollapsed: isCollapsed });
     });
   }
-}
-
-function notifyAllTabs() {
-  storage.sync.get([...blockIds, 'customDomains', 'hideFeedMode', 'fontFamily', 'themePreset', REMOVED_SITES_KEY], (data) => {
-    const message = { type: 'SETTINGS_UPDATED', settings: data };
-    if (typeof chrome !== 'undefined' && chrome.tabs) {
-      chrome.tabs.query({}, (tabs) => {
-        tabs.forEach(tab => {
-          chrome.tabs.sendMessage(tab.id, message).catch(() => {});
-        });
-      });
-    }
-  });
 }
 
 // ============ DEFAULT SITES FUNCTIONS ============
@@ -704,9 +708,7 @@ function createDefaultSiteCard(site, isEnabled) {
       return;
     }
     e.stopPropagation();
-    storage.sync.set({ [site.id]: e.target.checked }, () => {
-      notifyAllTabs();
-    });
+    storage.sync.set({ [site.id]: e.target.checked });
   });
   const slider = document.createElement('span');
   slider.className = 'slider';
@@ -752,7 +754,6 @@ function removeDefaultSite(siteId, siteName) {
           loadDefaultSites();
         }, 200);
       }
-      notifyAllTabs();
     });
   });
 }
@@ -855,9 +856,7 @@ function updateCustomDomain(domain, enabled) {
   storage.sync.get(['customDomains'], (data) => {
     const customDomains = data.customDomains || {};
     customDomains[domain] = enabled;
-    storage.sync.set({ customDomains }, () => {
-      notifyAllTabs();
-    });
+    storage.sync.set({ customDomains });
   });
 }
 
@@ -867,7 +866,6 @@ function removeCustomDomain(domain) {
     delete customDomains[domain];
     storage.sync.set({ customDomains }, () => {
       loadCustomDomains();
-      notifyAllTabs();
     });
   });
 }
@@ -893,7 +891,6 @@ function addCustomDomain(domain) {
     customDomains[cleanDomain] = true;
     storage.sync.set({ customDomains }, () => {
       loadCustomDomains();
-      notifyAllTabs();
     });
   });
   return true;
@@ -1088,10 +1085,10 @@ function updateToggleGroupPosition(group) {
 }
 
 function loadSettingsModalValues() {
-  storage.sync.get(['theme', 'hideFeedMode', 'fontFamily', 'themePreset', 'particlesEnabled'], (data) => {
+  storage.sync.get(['theme', 'hideFeedMode', 'fontFamily', 'themePreset', 'particlesEnabled', 'blockMode'], (data) => {
     const darkThemeBtn = document.querySelector('.toggle-option[data-theme="dark"]');
     const lightThemeBtn = document.querySelector('.toggle-option[data-theme="light"]');
-    
+
     if (data.theme === 'light') {
       lightThemeBtn?.classList.add('active');
       darkThemeBtn?.classList.remove('active');
@@ -1099,21 +1096,21 @@ function loadSettingsModalValues() {
       darkThemeBtn?.classList.add('active');
       lightThemeBtn?.classList.remove('active');
     }
-    
+
     const fontSelect = document.getElementById('fontSelect');
     if (fontSelect && data.fontFamily) {
       fontSelect.value = data.fontFamily;
     }
-    
+
     const themePresetSelect = document.getElementById('themePresetSelect');
     if (themePresetSelect) {
       const preset = data.themePreset || 'default';
       themePresetSelect.value = preset;
     }
-    
+
     const removeFeedBtn = document.querySelector('.toggle-option[data-feedmode="remove"]');
     const hideFeedBtn = document.querySelector('.toggle-option[data-feedmode="hide"]');
-    
+
     if (data.hideFeedMode === 'hide') {
       hideFeedBtn?.classList.add('active');
       removeFeedBtn?.classList.remove('active');
@@ -1122,10 +1119,23 @@ function loadSettingsModalValues() {
       hideFeedBtn?.classList.remove('active');
     }
 
+    const homeBlockBtn = document.querySelector('.toggle-option[data-blockmode="home"]');
+    const simpleBlockBtn = document.querySelector('.toggle-option[data-blockmode="simple"]');
+
+    if (data.blockMode === 'simple') {
+      simpleBlockBtn?.classList.add('active');
+      homeBlockBtn?.classList.remove('active');
+    } else {
+      homeBlockBtn?.classList.add('active');
+      simpleBlockBtn?.classList.remove('active');
+    }
+
     const themeToggleGroup = darkThemeBtn?.closest('.settings-toggle-group');
     const feedModeGroup = removeFeedBtn?.closest('.settings-toggle-group');
+    const blockModeGroup = homeBlockBtn?.closest('.settings-toggle-group');
     updateToggleGroupPosition(themeToggleGroup);
     updateToggleGroupPosition(feedModeGroup);
+    updateToggleGroupPosition(blockModeGroup);
 
     const particleToggle = document.getElementById('particleToggle');
     if (particleToggle) {
@@ -1148,21 +1158,21 @@ function saveTheme(theme) {
       if (moonIcon) moonIcon.style.display = 'block';
       if (sunIcon) sunIcon.style.display = 'none';
     }
-    notifyAllTabs();
   });
 }
 
 function saveFont(fontFamily) {
   storage.sync.set({ fontFamily: fontFamily }, () => {
     applyFontToPopup(fontFamily);
-    notifyAllTabs();
   });
 }
 
 function saveFeedMode(mode) {
-  storage.sync.set({ hideFeedMode: mode }, () => {
-    notifyAllTabs();
-  });
+  storage.sync.set({ hideFeedMode: mode });
+}
+
+function saveBlockMode(mode) {
+  storage.sync.set({ blockMode: mode });
 }
 
 function resetToDefaultSettings() {
@@ -1192,7 +1202,6 @@ function resetToDefaultSettings() {
   
   storage.sync.clear(() => {
     storage.sync.set(defaultSettings, () => {
-      console.log('Settings reset to default');
       
       currentPassword = null;
       isFirstTimeLock = true;
@@ -1233,7 +1242,6 @@ function resetToDefaultSettings() {
       if (confirmModal) confirmModal.style.display = 'none';
       
       closeSettingsModal();
-      notifyAllTabs();
     });
   });
 }
@@ -1264,13 +1272,9 @@ function showConfirmResetModal() {
     });
   }
   
-  const closeOnOutside = (e) => {
-    if (e.target === confirmModal) {
-      confirmModal.style.display = 'none';
-      document.removeEventListener('click', closeOnOutside);
-    }
+  confirmModal.onclick = (e) => {
+    if (e.target === confirmModal) confirmModal.style.display = 'none';
   };
-  document.addEventListener('click', closeOnOutside);
 }
 
 function setupSettingsModal() {
@@ -1285,22 +1289,30 @@ function setupSettingsModal() {
   const githubVersionLink = document.getElementById('githubVersionLink');
   if (githubVersionLink) {
     githubVersionLink.textContent = 'Loading...';
-    fetch('https://api.github.com/repos/reapertakumi/YouTube-Study-Enhancer/releases/latest')
-      .then(response => {
-        if (!response.ok) throw new Error('Network response was not ok');
-        return response.json();
-      })
-      .then(data => {
-        if (data && data.tag_name) {
-          githubVersionLink.textContent = data.tag_name;
-        } else {
-          githubVersionLink.textContent = 'Not found';
-        }
-      })
-      .catch(error => {
-        console.error('Error fetching GitHub version:', error);
-        githubVersionLink.textContent = 'Error loading';
-      });
+    const CACHE_MS = 6 * 60 * 60 * 1000;
+    storage.local.get(['latestVersionCache'], ({ latestVersionCache }) => {
+      if (latestVersionCache && Date.now() - latestVersionCache.fetchedAt < CACHE_MS) {
+        githubVersionLink.textContent = latestVersionCache.tag;
+        return;
+      }
+      fetch('https://api.github.com/repos/reapertakumi/YouTube-Study-Enhancer/releases/latest')
+        .then(response => {
+          if (!response.ok) throw new Error('Network response was not ok');
+          return response.json();
+        })
+        .then(data => {
+          if (data && data.tag_name) {
+            githubVersionLink.textContent = data.tag_name;
+            storage.local.set({ latestVersionCache: { tag: data.tag_name, fetchedAt: Date.now() } });
+          } else {
+            githubVersionLink.textContent = 'Not found';
+          }
+        })
+        .catch(error => {
+          console.error('Error fetching GitHub version:', error);
+          githubVersionLink.textContent = latestVersionCache ? latestVersionCache.tag : 'Error loading';
+        });
+    });
   }
   
   if (closeSettingsBtn) {
@@ -1315,7 +1327,7 @@ function setupSettingsModal() {
   
   const darkThemeBtn = document.querySelector('.toggle-option[data-theme="dark"]');
   const lightThemeBtn = document.querySelector('.toggle-option[data-theme="light"]');
-  
+
   if (darkThemeBtn) {
     darkThemeBtn.addEventListener('click', () => {
       if (!darkThemeBtn.classList.contains('active')) {
@@ -1327,7 +1339,7 @@ function setupSettingsModal() {
       }
     });
   }
-  
+
   if (lightThemeBtn) {
     lightThemeBtn.addEventListener('click', () => {
       if (!lightThemeBtn.classList.contains('active')) {
@@ -1336,6 +1348,33 @@ function setupSettingsModal() {
         const themeToggleGroup = lightThemeBtn.closest('.settings-toggle-group');
         updateToggleGroupPosition(themeToggleGroup);
         saveTheme('light');
+      }
+    });
+  }
+
+  const homeBlockBtn = document.querySelector('.toggle-option[data-blockmode="home"]');
+  const simpleBlockBtn = document.querySelector('.toggle-option[data-blockmode="simple"]');
+
+  if (homeBlockBtn) {
+    homeBlockBtn.addEventListener('click', () => {
+      if (!homeBlockBtn.classList.contains('active')) {
+        homeBlockBtn.classList.add('active');
+        simpleBlockBtn?.classList.remove('active');
+        const blockModeGroup = homeBlockBtn.closest('.settings-toggle-group');
+        updateToggleGroupPosition(blockModeGroup);
+        saveBlockMode('home');
+      }
+    });
+  }
+
+  if (simpleBlockBtn) {
+    simpleBlockBtn.addEventListener('click', () => {
+      if (!simpleBlockBtn.classList.contains('active')) {
+        simpleBlockBtn.classList.add('active');
+        homeBlockBtn?.classList.remove('active');
+        const blockModeGroup = simpleBlockBtn.closest('.settings-toggle-group');
+        updateToggleGroupPosition(blockModeGroup);
+        saveBlockMode('simple');
       }
     });
   }
@@ -1899,14 +1938,14 @@ const scheduleFeaturesList = document.getElementById('scheduleFeaturesList');
 
 let scheduleData = {
   enabled: false,
-  active: false, // Whether currently within the scheduled time range
   startTime: '09:00',
   endTime: '17:00',
   days: [1, 2, 3, 4, 5], // Mon-Fri
   features: []
 };
 
-let scheduleCheckInterval = null;
+// Whether the schedule is currently applied. Owned by background.js (stored as "scheduleActive").
+let scheduleActive = false;
 
 function openScheduleModal() {
   // Close settings modal if open
@@ -1931,7 +1970,8 @@ function closeScheduleModal() {
 function loadScheduleData() {
   storage.sync.get(['schedule'], (data) => {
     if (data.schedule) {
-      scheduleData = { ...scheduleData, ...data.schedule };
+      const { active, ...savedSchedule } = data.schedule;
+      scheduleData = { ...scheduleData, ...savedSchedule };
     }
     
     if (scheduleStartTime) scheduleStartTime.value = scheduleData.startTime;
@@ -2037,105 +2077,29 @@ function loadScheduleFeatures() {
 }
 
 function saveScheduleData() {
-  storage.sync.set({ schedule: scheduleData });
-}
-
-function updateScheduleStatus() {
-  if (!scheduleStatus) return;
-  
-  if (scheduleData.enabled) {
-    scheduleStatus.textContent = 'Active';
-    scheduleStatus.className = 'schedule-status-value active';
-    if (toggleScheduleBtn) {
-      toggleScheduleBtn.textContent = 'Disable Schedule';
-      toggleScheduleBtn.classList.add('active');
-    }
-  } else {
-    scheduleStatus.textContent = 'Inactive';
-    scheduleStatus.className = 'schedule-status-value inactive';
-    if (toggleScheduleBtn) {
-      toggleScheduleBtn.textContent = 'Enable Schedule';
-      toggleScheduleBtn.classList.remove('active');
-    }
-  }
+  storage.sync.set({ schedule: { ...scheduleData } });
 }
 
 function toggleSchedule() {
   scheduleData.enabled = !scheduleData.enabled;
-  scheduleData.active = false; // Reset active state when toggling
   saveScheduleData();
   updateScheduleStatus();
-
-  if (scheduleData.enabled) {
-    // Don't apply features yet - wait for start time
-    startScheduleCheck();
-  } else {
-    disableScheduleFeatures();
-    stopScheduleCheck();
-  }
-}
-
-function applyScheduleFeatures() {
-  // Save current settings before applying schedule
-  storage.sync.get([...allIds, 'customDomains'], (data) => {
-    const currentSettings = {};
-    allIds.forEach(id => {
-      currentSettings[id] = data[id] === true;
-    });
-    currentSettings.customDomains = data.customDomains || {};
-    storage.sync.set({ preScheduleSettings: currentSettings });
-
-    // Apply schedule features for regular IDs
-    const newSettings = {};
-    allIds.forEach(id => {
-      newSettings[id] = scheduleData.features.includes(id);
-    });
-
-    // Apply schedule features for custom domains
-    const newCustomDomains = {};
-    Object.keys(data.customDomains || {}).forEach(domain => {
-      const featureId = `custom_${domain}`;
-      newCustomDomains[domain] = scheduleData.features.includes(featureId);
-    });
-
-    storage.sync.set({ ...newSettings, customDomains: newCustomDomains }, () => {
-      applyAllFeatures();
-      // Delay card state update to ensure DOM is ready and loaded
-      setTimeout(() => updateCardStates(), 500);
-    });
-  });
-}
-
-function disableScheduleFeatures() {
-  // Restore pre-schedule settings
-  storage.sync.get(['preScheduleSettings'], (data) => {
-    if (data.preScheduleSettings) {
-      storage.sync.set(data.preScheduleSettings, () => {
-        applyAllFeatures();
-        updateCardStates();
-      });
-    }
-  });
+  // background.js reacts to the storage change: it applies the schedule if we're inside
+  // the time window, or restores the previous settings when the schedule is disabled.
 }
 
 function updateCardStates() {
-  // Update all cards including YouTube features and block sites
-  const allCards = document.querySelectorAll('.card');
-  console.log('updateCardStates: Found', allCards.length, 'cards, active:', scheduleData.active);
-  allCards.forEach(card => {
-    if (scheduleData.active) {
-      card.classList.add('schedule-disabled');
-    } else {
-      card.classList.remove('schedule-disabled');
-    }
+  document.querySelectorAll('.card').forEach(card => {
+    card.classList.toggle('schedule-disabled', scheduleActive);
   });
 }
 
 function updateScheduleStatus() {
   if (!scheduleStatus) return;
 
+  scheduleStatus.style.color = '';
   if (scheduleData.enabled) {
-    if (scheduleData.active) {
+    if (scheduleActive) {
       scheduleStatus.textContent = 'Active';
       scheduleStatus.className = 'schedule-status-value active';
     } else {
@@ -2150,7 +2114,6 @@ function updateScheduleStatus() {
   } else {
     scheduleStatus.textContent = 'Inactive';
     scheduleStatus.className = 'schedule-status-value inactive';
-    scheduleStatus.style.color = '';
     if (toggleScheduleBtn) {
       toggleScheduleBtn.textContent = 'Enable Schedule';
       toggleScheduleBtn.classList.remove('active');
@@ -2158,73 +2121,24 @@ function updateScheduleStatus() {
   }
 }
 
-function startScheduleCheck() {
-  if (scheduleCheckInterval) {
-    clearInterval(scheduleCheckInterval);
-  }
+// Keep the popup in sync with changes made elsewhere (e.g. the background
+// applying/ending the schedule while the popup is open).
+storage.onChanged.addListener((changes, area) => {
+  if (area !== 'sync') return;
 
-  scheduleCheckInterval = setInterval(() => {
-    if (!scheduleData.enabled) return;
-
-    const now = new Date();
-    const currentDay = now.getDay();
-    const currentTime = now.getHours() * 60 + now.getMinutes();
-
-    const [startHours, startMins] = scheduleData.startTime.split(':').map(Number);
-    const [endHours, endMins] = scheduleData.endTime.split(':').map(Number);
-
-    const startTotalMinutes = startHours * 60 + startMins;
-    const endTotalMinutes = endHours * 60 + endMins;
-
-    const isWithinTime = currentTime >= startTotalMinutes && currentTime < endTotalMinutes;
-    const isCorrectDay = scheduleData.days.includes(currentDay);
-
-    console.log('Schedule check:', {
-      currentTime: `${now.getHours()}:${now.getMinutes()}`,
-      scheduleTime: `${scheduleData.startTime} - ${scheduleData.endTime}`,
-      isWithinTime,
-      isCorrectDay,
-      currentDay,
-      scheduledDays: scheduleData.days,
-      wasActive: scheduleData.active
-    });
-
-    if (isWithinTime && isCorrectDay && !scheduleData.active) {
-      // Start time reached - activate schedule
-      console.log('Start time reached, activating schedule...');
-      scheduleData.active = true;
-      saveScheduleData();
-      updateScheduleStatus();
-      applyScheduleFeatures();
-    } else if ((!isWithinTime || !isCorrectDay) && scheduleData.active) {
-      // End time reached or wrong day - deactivate schedule
-      console.log('End time reached or wrong day, deactivating schedule...');
-      scheduleData.active = false;
-      saveScheduleData();
-      updateScheduleStatus();
-      disableScheduleFeatures();
+  allIds.forEach(id => {
+    if (changes[id]) {
+      const element = document.getElementById(id);
+      if (element) element.checked = changes[id].newValue === true;
     }
-  }, 1000); // Check every second for instant response
-}
-
-function stopScheduleCheck() {
-  if (scheduleCheckInterval) {
-    clearInterval(scheduleCheckInterval);
-    scheduleCheckInterval = null;
-  }
-}
-
-function applyAllFeatures() {
-  // This function should trigger the content scripts to apply all features
-  // We'll send a message to all tabs to reload settings
-  chrome.tabs.query({}, (tabs) => {
-    tabs.forEach(tab => {
-      if (tab.url && tab.url.includes('youtube.com')) {
-        chrome.tabs.sendMessage(tab.id, { action: 'reloadSettings' });
-      }
-    });
   });
-}
+  if (changes.customDomains) loadCustomDomains();
+  if (changes.scheduleActive) {
+    scheduleActive = changes.scheduleActive.newValue === true;
+    updateScheduleStatus();
+    updateCardStates();
+  }
+});
 
 // Schedule event listeners
 if (openScheduleBtn) {

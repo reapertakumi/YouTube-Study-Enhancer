@@ -1,9 +1,5 @@
 const CURRENT_VERSION = chrome.runtime.getManifest().version;
 
-console.log("Background script loaded, version:", CURRENT_VERSION);
-
-const injectedTabs = new Set();
-
 // Context menu IDs
 const CONTEXT_MENU_PARENT = "download_image";
 const CONTEXT_MENU_PNG = "download_image_png";
@@ -14,7 +10,6 @@ const CONTEXT_MENU_SCREENSHOT_FULL = "screenshot_page_full";
 // Create context menus on install
 chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason === 'install') {
-    console.log('Extension installed');
     chrome.storage.sync.set({
       speed: false,
       sidebar: false,
@@ -30,16 +25,14 @@ chrome.runtime.onInstalled.addListener((details) => {
       theme: 'dark',
       customDomains: {}
     });
-  } else if (details.reason === 'update') {
-    console.log(`Extension updated from ${details.previousVersion} to ${CURRENT_VERSION}`);
   }
   
   // Create context menu
   createContextMenus();
 });
 
-// Also create context menu when background script wakes up
-createContextMenus();
+// Context menus persist across service-worker restarts in MV3, so they only
+// need to be (re)created on install/update, not every time the worker wakes.
 
 function createContextMenus() {
   // Remove existing menus to avoid duplicates
@@ -88,7 +81,6 @@ function createContextMenus() {
       contexts: ["page"]
     });
     
-    console.log("Context menus created");
   });
 }
 
@@ -107,7 +99,6 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
 
 // Take screenshot of visible area only
 async function takeVisibleScreenshot(tabId) {
-  console.log("Taking visible screenshot of tab:", tabId);
   
   try {
     const tab = await chrome.tabs.get(tabId);
@@ -133,8 +124,6 @@ async function takeVisibleScreenshot(tabId) {
     }, (downloadId) => {
       if (chrome.runtime.lastError) {
         console.error('Screenshot download failed:', chrome.runtime.lastError.message);
-      } else {
-        console.log('Screenshot download started with ID:', downloadId);
       }
     });
     
@@ -145,7 +134,6 @@ async function takeVisibleScreenshot(tabId) {
 
 // Take full page screenshot using debugger API - FIXED VERSION
 async function takeFullPageScreenshot(tabId) {
-  console.log("Taking full page screenshot of tab:", tabId);
   
   try {
     const tab = await chrome.tabs.get(tabId);
@@ -189,7 +177,6 @@ async function takeFullPageScreenshot(tabId) {
     const scrollWidth = Math.ceil(result.result.width);
     const scrollHeight = Math.ceil(result.result.height);
     
-    console.log(`Page size: ${scrollWidth} x ${scrollHeight}`);
     
     // Limit maximum size to prevent memory issues (max 10000x10000)
     const MAX_DIMENSION = 10000;
@@ -199,7 +186,6 @@ async function takeFullPageScreenshot(tabId) {
     
     // Attach debugger to the tab
     await chrome.debugger.attach({ tabId: tabId }, "1.3");
-    console.log("Debugger attached to tab:", tabId);
     
     // Enable the Page domain
     await chrome.debugger.sendCommand({ tabId: tabId }, "Page.enable");
@@ -240,7 +226,6 @@ async function takeFullPageScreenshot(tabId) {
     
     // Detach debugger
     await chrome.debugger.detach({ tabId: tabId });
-    console.log("Debugger detached from tab:", tabId);
     
     // Convert base64 to data URL
     const screenshotDataUrl = `data:image/png;base64,${screenshot.data}`;
@@ -256,8 +241,6 @@ async function takeFullPageScreenshot(tabId) {
     }, (downloadId) => {
       if (chrome.runtime.lastError) {
         console.error('Full page screenshot download failed:', chrome.runtime.lastError.message);
-      } else {
-        console.log('Full page screenshot download started with ID:', downloadId);
       }
     });
     
@@ -272,7 +255,6 @@ async function takeFullPageScreenshot(tabId) {
     }
     
     // Fallback: try using chrome.tabs.captureVisibleTab with scrolling
-    console.log("Attempting fallback screenshot method...");
     try {
       await takeFullPageScreenshotFallback(tabId);
     } catch (fallbackError) {
@@ -281,72 +263,62 @@ async function takeFullPageScreenshot(tabId) {
   }
 }
 
-// Fallback method for full page screenshot using visible area capture and stitching
+// Fallback for full page screenshots (e.g. when DevTools is already attached):
+// scroll through the page, capture each viewport and stitch them on an OffscreenCanvas.
 async function takeFullPageScreenshotFallback(tabId) {
-  try {
-    // Inject script to get page height and scroll
-    const [heightResult] = await chrome.scripting.executeScript({
-      target: { tabId: tabId },
-      func: () => {
-        return {
-          height: Math.max(
-            document.body.scrollHeight,
-            document.documentElement.scrollHeight
-          ),
-          viewportHeight: window.innerHeight
-        };
-      }
-    });
-    
-    const pageHeight = heightResult.result.height;
-    const viewportHeight = heightResult.result.viewportHeight;
-    const numCaptures = Math.ceil(pageHeight / viewportHeight);
-    
-    console.log(`Fallback: Capturing ${numCaptures} segments`);
-    
-    // Capture each segment
-    const segments = [];
-    for (let i = 0; i < numCaptures; i++) {
-      const scrollY = i * viewportHeight;
-      
-      // Scroll to position
-      await chrome.scripting.executeScript({
-        target: { tabId: tabId },
-        func: (y) => window.scrollTo(0, y),
-        args: [scrollY]
-      });
-      
-      // Wait for any lazy loading
-      await new Promise(resolve => setTimeout(resolve, 300));
-      
-      // Capture visible area
-      const tab = await chrome.tabs.get(tabId);
-      const screenshotDataUrl = await chrome.tabs.captureVisibleTab(
-        tab.windowId,
-        { format: "png" }
-      );
-      
-      segments.push(screenshotDataUrl);
-    }
-    
-    // Scroll back to top
-    await chrome.scripting.executeScript({
-      target: { tabId: tabId },
-      func: () => window.scrollTo(0, 0)
-    });
-    
-    console.log(`Captured ${segments.length} segments, but stitching requires canvas API which is limited in background script`);
-    console.log("Fallback: Consider using the primary method or a dedicated screenshot extension for very long pages");
-    
-  } catch (error) {
-    console.error('Fallback screenshot failed:', error);
-  }
-}
+  const CAPTURE_GAP_MS = 600; // captureVisibleTab is rate-limited to ~2 calls/second
+  const MAX_CANVAS_HEIGHT = 16384;
 
-// Handle debugger detach events
-chrome.debugger.onDetach.addListener((source, reason) => {
-  console.log(`Debugger detached from tab ${source.tabId}: ${reason}`);
-});
+  const tab = await chrome.tabs.get(tabId);
+  const [{ result: page }] = await chrome.scripting.executeScript({
+    target: { tabId },
+    func: () => ({
+      height: Math.max(document.documentElement.scrollHeight, document.body ? document.body.scrollHeight : 0),
+      viewportHeight: window.innerHeight,
+      originalScrollY: window.scrollY
+    })
+  });
+
+  const viewportHeight = Math.max(1, page.viewportHeight);
+  const captures = [];
+  let lastY = -1;
+
+  for (let y = 0; y < page.height; y += viewportHeight) {
+    const [{ result: actualY }] = await chrome.scripting.executeScript({
+      target: { tabId },
+      func: (targetY) => { window.scrollTo(0, targetY); return window.scrollY; },
+      args: [y]
+    });
+    if (actualY === lastY) break; // reached the bottom
+    lastY = actualY;
+
+    await new Promise(resolve => setTimeout(resolve, CAPTURE_GAP_MS));
+    const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: "png" });
+    captures.push({ y: actualY, bitmap: await createImageBitmap(dataURLToBlob(dataUrl)) });
+  }
+
+  await chrome.scripting.executeScript({
+    target: { tabId },
+    func: (y) => window.scrollTo(0, y),
+    args: [page.originalScrollY]
+  });
+
+  if (captures.length === 0) return;
+
+  const scale = captures[0].bitmap.height / viewportHeight;
+  const width = captures[0].bitmap.width;
+  const height = Math.min(Math.round(page.height * scale), MAX_CANVAS_HEIGHT);
+  const canvas = new OffscreenCanvas(width, height);
+  const ctx = canvas.getContext('2d');
+
+  for (const { y, bitmap } of captures) {
+    ctx.drawImage(bitmap, 0, Math.round(y * scale));
+    bitmap.close();
+  }
+
+  const blob = await canvas.convertToBlob({ type: 'image/png' });
+  await downloadBlobDirect(blob, generateScreenshotFilename("fullpage"));
+}
 
 function generateScreenshotFilename(type) {
   const timestamp = new Date();
@@ -362,7 +334,6 @@ function generateScreenshotFilename(type) {
 }
 
 async function downloadImageAs(imageUrl, format) {
-  console.log(`Downloading image as ${format}:`, imageUrl);
   
   try {
     // Handle data URLs directly
@@ -509,7 +480,6 @@ async function downloadBlobDirect(blob, filename) {
           console.error('Download failed:', chrome.runtime.lastError.message);
           reject(new Error(chrome.runtime.lastError.message));
         } else {
-          console.log('Download started with ID:', downloadId);
           resolve(downloadId);
         }
       });
@@ -523,183 +493,229 @@ async function downloadBlobDirect(blob, filename) {
   });
 }
 
-async function injectBlocker(tabId, url) {
-  if (!url || url.startsWith('chrome://') || url.startsWith('edge://') || url.startsWith('about:') || url.startsWith('chrome-extension://')) {
-    return;
-  }
-  
-  if (injectedTabs.has(tabId)) {
-    return;
-  }
-  
-  if (chrome.scripting && chrome.scripting.executeScript) {
-    try {
-      await chrome.scripting.executeScript({
-        target: { tabId: tabId },
-        files: ['blocker.js']
-      });
-      injectedTabs.add(tabId);
-      console.log("Successfully injected blocker into tab:", tabId, url);
-    } catch (err) {
-      console.log('Error injecting blocker:', err);
-    }
-  }
-}
-
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (changeInfo.status === 'complete' && tab.url) {
-    injectBlocker(tabId, tab.url);
-  }
-});
-
-chrome.tabs.onCreated.addListener((tab) => {
-  if (tab.url) {
-    setTimeout(() => {
-      injectBlocker(tab.id, tab.url);
-    }, 1000);
-  }
-});
-
-chrome.tabs.onRemoved.addListener((tabId) => {
-  injectedTabs.delete(tabId);
-});
-
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === 'openHotkeyUrl' && request.url) {
+  if (request.action === 'openHotkeyUrl' && /^https?:\/\//i.test(request.url || '')) {
     chrome.tabs.create({ url: request.url }, (tab) => {
       if (chrome.runtime.lastError) {
         console.error('Failed to open hotkey URL:', chrome.runtime.lastError.message);
-      } else {
-        console.log('Opened hotkey URL in new tab:', tab.id);
       }
     });
   }
 });
 
-// Schedule checking in background (runs even when popup is closed)
-let scheduleCheckInterval = null;
 
-function startScheduleCheck() {
-  if (scheduleCheckInterval) {
-    clearInterval(scheduleCheckInterval);
-  }
+// ============ SCHEDULE ============
+// The background worker is the single owner of schedule activation. It is woken
+// once a minute by chrome.alarms (a setInterval would die with the MV3 worker and
+// raced with the popup's own copy of this loop).
+const SCHEDULE_ALARM = 'scheduleCheck';
+const SCHEDULABLE_IDS = ["speed", "sidebar", "comments", "blockShortScroll", "removeNotifications", "shorts", "instagram", "twitter", "tiktok", "reddit", "pinterest", "blockYoutube"];
 
-  scheduleCheckInterval = setInterval(() => {
-    chrome.storage.sync.get(['schedule'], (data) => {
-      if (!data.schedule || !data.schedule.enabled) {
-        return;
-      }
-
-      const now = new Date();
-      const currentDay = now.getDay();
-      const currentTime = now.getHours() * 60 + now.getMinutes();
-
-      const [startHours, startMins] = data.schedule.startTime.split(':').map(Number);
-      const [endHours, endMins] = data.schedule.endTime.split(':').map(Number);
-
-      const startTotalMinutes = startHours * 60 + startMins;
-      const endTotalMinutes = endHours * 60 + endMins;
-
-      const isWithinTime = currentTime >= startTotalMinutes && currentTime < endTotalMinutes;
-      const isCorrectDay = data.schedule.days.includes(currentDay);
-
-      console.log('Background schedule check:', {
-        currentTime: `${now.getHours()}:${now.getMinutes()}`,
-        scheduleTime: `${data.schedule.startTime} - ${data.schedule.endTime}`,
-        isWithinTime,
-        isCorrectDay,
-        currentDay,
-        scheduledDays: data.schedule.days,
-        wasActive: data.schedule.active
-      });
-
-      if (isWithinTime && isCorrectDay && !data.schedule.active) {
-        // Start time reached - activate schedule
-        console.log('Start time reached, activating schedule in background...');
-        data.schedule.active = true;
-        chrome.storage.sync.set({ schedule: data.schedule }, () => {
-          // Save current user preferences before applying schedule
-          const allIds = ["speed", "sidebar", "comments", "blockShortScroll", "removeNotifications", "shorts", "instagram", "twitter", "tiktok", "reddit", "pinterest", "blockYoutube"];
-          chrome.storage.sync.get([...allIds, 'customDomains'], (currentData) => {
-            const currentSettings = {};
-            allIds.forEach(id => {
-              currentSettings[id] = currentData[id] === true;
-            });
-            currentSettings.customDomains = currentData.customDomains || {};
-            chrome.storage.sync.set({ preScheduleSettings: currentSettings }, () => {
-              // Apply schedule features for regular IDs
-              const newSettings = {};
-              allIds.forEach(id => {
-                newSettings[id] = data.schedule.features.includes(id);
-              });
-
-              // Apply schedule features for custom domains
-              const newCustomDomains = {};
-              Object.keys(currentData.customDomains || {}).forEach(domain => {
-                const featureId = `custom_${domain}`;
-                newCustomDomains[domain] = data.schedule.features.includes(featureId);
-              });
-
-              chrome.storage.sync.set({ ...newSettings, customDomains: newCustomDomains }, () => {
-                // Notify all tabs to reload settings
-                chrome.tabs.query({}, (tabs) => {
-                  tabs.forEach(tab => {
-                    if (tab.url && (tab.url.includes('youtube.com') || tab.url.includes('http'))) {
-                      chrome.tabs.sendMessage(tab.id, { action: 'reloadSettings' }).catch(() => {
-                        // Ignore errors for tabs that can't receive messages
-                      });
-                    }
-                  });
-                });
-              });
-            });
-          });
-        });
-      } else if ((!isWithinTime || !isCorrectDay) && data.schedule.active) {
-        // End time reached or wrong day - deactivate schedule
-        console.log('End time reached or wrong day, deactivating schedule in background...');
-        data.schedule.active = false;
-        chrome.storage.sync.set({ schedule: data.schedule }, () => {
-          // Restore pre-schedule settings
-          chrome.storage.sync.get(['preScheduleSettings'], (preData) => {
-            if (preData.preScheduleSettings) {
-              chrome.storage.sync.set(preData.preScheduleSettings, () => {
-                // Notify all tabs to reload settings
-                chrome.tabs.query({}, (tabs) => {
-                  tabs.forEach(tab => {
-                    if (tab.url && (tab.url.includes('youtube.com') || tab.url.includes('http'))) {
-                      chrome.tabs.sendMessage(tab.id, { action: 'reloadSettings' }).catch(() => {
-                        // Ignore errors for tabs that can't receive messages
-                      });
-                    }
-                  });
-                });
-              });
-            }
-          });
-        });
-      }
-    });
-  }, 1000); // Check every second for instant response
+function parseTimeToMinutes(value) {
+  const [h, m] = String(value || '').split(':').map(Number);
+  return Number.isFinite(h) && Number.isFinite(m) ? h * 60 + m : NaN;
 }
 
-// Start schedule check when extension loads
-chrome.storage.sync.get(['schedule'], (data) => {
-  if (data.schedule && data.schedule.enabled) {
-    startScheduleCheck();
+// Supports overnight ranges (e.g. 22:00 - 06:00); the overnight tail counts for
+// the day the range started on.
+function isWithinSchedule(schedule, now = new Date()) {
+  const start = parseTimeToMinutes(schedule.startTime);
+  const end = parseTimeToMinutes(schedule.endTime);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || start === end) return false;
+
+  const days = Array.isArray(schedule.days) ? schedule.days : [];
+  const today = now.getDay();
+  const current = now.getHours() * 60 + now.getMinutes();
+
+  if (start < end) {
+    return days.includes(today) && current >= start && current < end;
+  }
+  if (current >= start) return days.includes(today);
+  if (current < end) return days.includes((today + 6) % 7);
+  return false;
+}
+
+async function activateSchedule(schedule) {
+  const features = Array.isArray(schedule.features) ? schedule.features : [];
+  const current = await chrome.storage.sync.get([...SCHEDULABLE_IDS, 'customDomains']);
+  const currentDomains = current.customDomains || {};
+
+  const pre = { customDomains: { ...currentDomains } };
+  const next = {};
+  SCHEDULABLE_IDS.forEach(id => {
+    pre[id] = current[id] === true;
+    // Additive: scheduled features are switched on, anything the user already
+    // had on stays on.
+    next[id] = pre[id] || features.includes(id);
+  });
+
+  const nextDomains = {};
+  Object.keys(currentDomains).forEach(domain => {
+    nextDomains[domain] = currentDomains[domain] === true || features.includes(`custom_${domain}`);
+  });
+
+  await chrome.storage.sync.set({
+    preScheduleSettings: pre,
+    ...next,
+    customDomains: nextDomains,
+    scheduleActive: true
+  });
+}
+
+async function deactivateSchedule() {
+  const data = await chrome.storage.sync.get(['preScheduleSettings', 'customDomains']);
+  const pre = data.preScheduleSettings;
+  const update = { scheduleActive: false };
+
+  if (pre) {
+    SCHEDULABLE_IDS.forEach(id => { update[id] = pre[id] === true; });
+    // Restore toggles of domains that existed before; keep domains added during the schedule.
+    const preDomains = pre.customDomains || {};
+    const merged = {};
+    Object.entries(data.customDomains || {}).forEach(([domain, enabled]) => {
+      merged[domain] = domain in preDomains ? preDomains[domain] === true : enabled;
+    });
+    update.customDomains = merged;
+  }
+
+  await chrome.storage.sync.set(update);
+  await chrome.storage.sync.remove('preScheduleSettings');
+}
+
+async function evaluateScheduleNow() {
+  const data = await chrome.storage.sync.get(['schedule', 'scheduleActive']);
+  const schedule = data.schedule;
+  // Migrate the old "schedule.active" flag that the popup used to own.
+  const active = data.scheduleActive !== undefined ? data.scheduleActive === true : schedule?.active === true;
+  const shouldBeActive = !!(schedule && schedule.enabled && isWithinSchedule(schedule));
+
+  if (shouldBeActive && !active) {
+    await activateSchedule(schedule);
+  } else if (!shouldBeActive && active) {
+    await deactivateSchedule();
+  }
+}
+
+// Serialize evaluations so overlapping triggers can't snapshot settings twice.
+let scheduleQueue = Promise.resolve();
+function evaluateSchedule() {
+  scheduleQueue = scheduleQueue.then(evaluateScheduleNow).catch(err => console.error('Schedule check failed:', err));
+  return scheduleQueue;
+}
+
+async function syncScheduleAlarm() {
+  const { schedule, scheduleActive } = await chrome.storage.sync.get(['schedule', 'scheduleActive']);
+  if ((schedule && schedule.enabled) || scheduleActive) {
+    const existing = await chrome.alarms.get(SCHEDULE_ALARM);
+    if (!existing) {
+      // Fire just after each minute boundary so start/end times are honoured promptly.
+      const nextMinute = Math.ceil((Date.now() + 1000) / 60000) * 60000 + 500;
+      chrome.alarms.create(SCHEDULE_ALARM, { when: nextMinute, periodInMinutes: 1 });
+    }
+  } else {
+    await chrome.alarms.clear(SCHEDULE_ALARM);
+  }
+}
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === SCHEDULE_ALARM) evaluateSchedule();
+});
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'sync' && changes.schedule) {
+    syncScheduleAlarm();
+    evaluateSchedule();
   }
 });
 
-// Listen for schedule changes
-chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === 'sync' && changes.schedule) {
-    if (changes.schedule.newValue && changes.schedule.newValue.enabled) {
-      startScheduleCheck();
-    } else {
-      if (scheduleCheckInterval) {
-        clearInterval(scheduleCheckInterval);
-        scheduleCheckInterval = null;
-      }
+chrome.runtime.onStartup.addListener(() => {
+  syncScheduleAlarm();
+  evaluateSchedule();
+});
+
+syncScheduleAlarm();
+evaluateSchedule();
+
+// ============ NETWORK-LEVEL SITE BLOCKING ============
+// declarativeNetRequest redirects blocked sites before any of their content loads
+// (no flash of the page). blocker.js still handles already-open tabs and
+// in-page (SPA) navigations, which never reach the network as a page load.
+const BLOCK_RULE_ID = 1;
+const SHORTS_RULE_ID = 2;
+const BLOCK_SETTING_KEYS = ['blockYoutube', 'instagram', 'twitter', 'tiktok', 'reddit', 'pinterest', 'shorts', 'customDomains', 'removedDefaultSites', 'blockMode'];
+const DEFAULT_BLOCK_DOMAINS = [
+  { id: 'blockYoutube', domains: ['youtube.com'] },
+  { id: 'instagram', domains: ['instagram.com'] },
+  { id: 'twitter', domains: ['twitter.com', 'x.com'] },
+  { id: 'tiktok', domains: ['tiktok.com'] },
+  { id: 'reddit', domains: ['reddit.com'] },
+  { id: 'pinterest', domains: ['pinterest.com'] }
+];
+
+// requestDomains only accepts lowercase ASCII hostnames; one bad entry would make
+// the whole rule update fail, so anything else is dropped.
+function normalizeBlockDomain(domain) {
+  const clean = String(domain || '').trim().toLowerCase()
+    .replace(/^https?:\/\//, '').replace(/\/.*$/, '').replace(/^www\./, '').replace(/\.$/, '');
+  return /^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(clean) ? clean : null;
+}
+
+function buildBlockRules(settings) {
+  const removed = settings.removedDefaultSites || [];
+  const domains = new Set();
+
+  DEFAULT_BLOCK_DOMAINS.forEach(site => {
+    if (settings[site.id] === true && !removed.includes(site.id)) {
+      site.domains.forEach(d => domains.add(d));
     }
+  });
+  Object.entries(settings.customDomains || {}).forEach(([domain, enabled]) => {
+    const clean = enabled ? normalizeBlockDomain(domain) : null;
+    if (clean) domains.add(clean);
+  });
+
+  const rules = [];
+  if (domains.size > 0) {
+    const blockPage = settings.blockMode === 'simple' ? '/simple_block.html' : '/blocker.html';
+    rules.push({
+      id: BLOCK_RULE_ID,
+      priority: 2,
+      action: { type: 'redirect', redirect: { extensionPath: blockPage } },
+      // requestDomains also matches subdomains (www., m., mobile. ...)
+      condition: { requestDomains: [...domains], resourceTypes: ['main_frame', 'sub_frame'] }
+    });
+  }
+  if (settings.shorts === true) {
+    rules.push({
+      id: SHORTS_RULE_ID,
+      priority: 1,
+      action: { type: 'redirect', redirect: { url: 'https://www.youtube.com/' } },
+      condition: { regexFilter: /^https?:\/\/([a-z0-9-]+\.)?youtube\.com\/shorts\//.source, resourceTypes: ['main_frame'] }
+    });
+  }
+  return rules;
+}
+
+async function updateBlockRulesNow() {
+  const settings = await chrome.storage.sync.get(BLOCK_SETTING_KEYS);
+  const existing = await chrome.declarativeNetRequest.getDynamicRules();
+  await chrome.declarativeNetRequest.updateDynamicRules({
+    removeRuleIds: existing.map(rule => rule.id),
+    addRules: buildBlockRules(settings)
+  });
+}
+
+let blockRulesQueue = Promise.resolve();
+function updateBlockRules() {
+  blockRulesQueue = blockRulesQueue.then(updateBlockRulesNow).catch(err => console.error('Updating block rules failed:', err));
+  return blockRulesQueue;
+}
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'sync' && BLOCK_SETTING_KEYS.some(key => key in changes)) {
+    updateBlockRules();
   }
 });
+
+chrome.runtime.onInstalled.addListener(() => updateBlockRules());
+chrome.runtime.onStartup.addListener(() => updateBlockRules());

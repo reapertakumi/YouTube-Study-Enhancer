@@ -1,818 +1,204 @@
-let settings = {
-  shorts: false,
-  blockShortScroll: false,
-  speed: false,
-  sidebar: false,
-  comments: false,
-  removeNotifications: false,
-  hideFeedMode: "remove"
-};
+// YouTube Study Enhancer - YouTube page features.
+//
+// Visual features are applied through one injected <style> element, so they also
+// cover elements YouTube renders lazily (comments, sidebar, notifications) without
+// MutationObservers or polling. Speed blocking uses document-level capture listeners.
+(function() {
+  if (window.__studyEnhancerContentLoaded) return;
+  window.__studyEnhancerContentLoaded = true;
 
-let speedInterval = null;
-let speedObservers = [];
-let originalPlaybackRates = new WeakMap();
-let rateChangeHandlers = new WeakMap();
+  const SETTING_KEYS = ["shorts", "blockShortScroll", "speed", "sidebar", "comments", "removeNotifications", "hideFeedMode"];
+  const STYLE_ID = 'study-enhancer-styles';
 
-let isInitialized = false;
-let feedOriginalDisplay = null;
-let resizeTimeout = null;
-let shortsStyleElement = null;
-let sidemenuShortsStyleElement = null;
+  let settings = {
+    shorts: false,
+    blockShortScroll: false,
+    speed: false,
+    sidebar: false,
+    comments: false,
+    removeNotifications: false,
+    hideFeedMode: "remove"
+  };
 
-let originalTheaterStateBeforeEnable = false;
-let isRemoveModeActive = false;
+  // Theater-mode state for "remove" feed mode. The original state is captured once
+  // when remove mode turns on and survives SPA navigations, so it can be restored.
+  let removeModeActive = false;
+  let originalTheaterState = null;
+  let theaterRetryTimer = null;
 
-// Cache for DOM elements (Fix #4)
-let cachedSecondaryColumns = null;
-let lastColumnsFindTime = 0;
-let cachedFeedElement = null;
-let lastFeedFindTime = 0;
-let cachedTheaterButton = null;
-let lastButtonFindTime = 0;
-
-// Debounce timers (Fix #7)
-let debounceTimer = null;
-let updateTimer = null;
-let pendingVideos = new Set();
-
-// Fix #8: Track all active resources for proper cleanup
-let activeMutationObservers = [];
-let activeIntervals = [];
-let activeEventListeners = [];
-let navigationCheckInterval = null;
-
-const storage = (typeof chrome !== 'undefined' && chrome.storage) ? chrome.storage : browser.storage;
-
-// Fix #1 & #5: Proper settings loading with error handling
-async function loadSettings() {
-  try {
-    const data = await storage.sync.get(["shorts", "blockShortScroll", "speed", "sidebar", "comments", "hideFeedMode"]);
-    console.log("Settings loaded:", data);
-    settings = { ...settings, ...data };
-    return true;
-  } catch (error) {
-    console.error("Failed to load settings:", error);
-    // Use default settings
-    return true;
-  }
-}
-
-// Initialize after settings are loaded
-loadSettings().then(() => {
-  if (!isInitialized) {
-    init();
-    isInitialized = true;
-  } else {
-    applyAllFeaturesOnce();
-  }
-});
-
-// Listen for setting changes
-storage.onChanged.addListener(changes => {
-  let settingsChanged = false;
-  Object.keys(changes).forEach(key => {
-    if (key in settings || key === 'hideFeedMode' || key === 'blockShortScroll') {
-      const oldValue = settings[key];
-      const newValue = changes[key].newValue;
-      settings[key] = newValue;
-      settingsChanged = true;
-      console.log(`Setting changed: ${key} = ${newValue} (was: ${oldValue})`);
-    }
-  });
-  
-  if (settingsChanged) {
-    if (updateTimer) clearTimeout(updateTimer);
-    updateTimer = setTimeout(() => {
-      applyAllFeaturesOnce();
-      updateTimer = null;
-    }, 50);
-  }
-});
-
-// Listen for messages from popup
-if (typeof chrome !== 'undefined' && chrome.runtime) {
-  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (message.type === 'SETTINGS_UPDATED' && message.settings) {
-      console.log("Received settings update from popup:", message.settings);
-      let changed = false;
-      Object.keys(message.settings).forEach(key => {
-        if (key in settings || key === 'hideFeedMode' || key === 'blockShortScroll') {
-          if (settings[key] !== message.settings[key]) {
-            const oldValue = settings[key];
-            settings[key] = message.settings[key];
-            changed = true;
-            console.log(`Setting updated from popup: ${key} = ${message.settings[key]} (was: ${oldValue})`);
-          }
-        }
-      });
-      if (changed) {
-        if (updateTimer) clearTimeout(updateTimer);
-        updateTimer = setTimeout(() => {
-          applyAllFeaturesOnce();
-          updateTimer = null;
-        }, 30);
-      }
-    }
-    sendResponse({ success: true });
-  });
-}
-
-function init() {
-  console.log("Initializing YouTube Study Enhancer");
-  applyAllFeaturesOnce();
-}
-
-function applyAllFeaturesOnce() {
-  hideShorts();
-  handleVideoFeed();
-  handleComments();
-  handleNotifications();
-  handleSpeed();
-}
-
-// ============ HIDE SHORTS ============
-function hideShorts() {
-  // Remove existing style elements
-  if (shortsStyleElement) {
-    shortsStyleElement.remove();
-    shortsStyleElement = null;
-  }
-  if (sidemenuShortsStyleElement) {
-    sidemenuShortsStyleElement.remove();
-    sidemenuShortsStyleElement = null;
-  }
-
-  // If shorts setting is enabled, hide all shorts
-  if (settings.shorts) {
-    shortsStyleElement = document.createElement('style');
-    shortsStyleElement.id = 'study-enhancer-hide-shorts';
-    shortsStyleElement.textContent = `
-      /* Hide sidebar shorts link in mini guide */
-      a[href="/shorts/"],
-      a[href="/shorts"],
-      ytd-mini-guide-entry-renderer a[href*="/shorts/"] {
-        display: none !important;
-      }
-
-      /* Hide the entire shorts shelf on homepage */
+  const CSS = {
+    shorts: `
+      a[href="/shorts/"], a[href="/shorts"],
+      ytd-mini-guide-entry-renderer a[href*="/shorts/"],
       ytd-rich-section-renderer:has(ytd-rich-shelf-renderer[is-shorts]),
       ytd-rich-shelf-renderer[is-shorts],
       ytd-reel-shelf-renderer,
       ytd-rich-item-renderer:has([href*="/shorts/"]),
-      ytd-video-renderer:has([href*="/shorts/"]) {
-        display: none !important;
-      }
-
-      /* Hide the shorts tab in guide */
-      ytd-guide-entry-renderer a[href="/shorts"],
-      ytd-mini-guide-entry-renderer a[href="/shorts"] {
-        display: none !important;
-      }
-
-      /* Hide shorts button in top bar */
+      ytd-video-renderer:has([href*="/shorts/"]),
+      ytd-guide-entry-renderer:has(a[title="Shorts"]),
+      ytd-mini-guide-entry-renderer:has(a[title="Shorts"]),
       ytd-topbar-menu-button-renderer[aria-label="Shorts"],
-      ytd-topbar-menu-button-renderer button[aria-label="Shorts"] {
-        display: none !important;
-      }
-
-      /* Hide shorts guide entry on video pages (full guide) */
-      ytd-guide-section-renderer ytd-guide-entry-renderer a[title="Shorts"],
-      ytd-guide-section-renderer ytd-guide-entry-renderer a[href="/shorts"],
-      ytd-guide-entry-renderer a[title="Shorts"] {
-        display: none !important;
-      }
-
-      /* Hide shorts in search results grid */
       .ytGridShelfViewModelGridShelfRow,
-      ytd-item-section-renderer .ytGridShelfViewModelGridShelfRow,
       ytm-shorts-lockup-view-model-v2,
       ytm-shorts-lockup-view-model,
       [class*="GridShelf"]:has(ytm-shorts-lockup-view-model) {
         display: none !important;
-      }
-    `;
-
-    document.head.appendChild(shortsStyleElement);
-    console.log("Shorts hiding enabled");
-  }
-  // If blockShortScroll is enabled (but shorts is not), only hide sidemenu button
-  else if (settings.blockShortScroll) {
-    sidemenuShortsStyleElement = document.createElement('style');
-    sidemenuShortsStyleElement.id = 'study-enhancer-hide-sidemenu-shorts';
-    sidemenuShortsStyleElement.textContent = `
-      /* Hide shorts guide entry on video pages (full guide) */
-      ytd-guide-section-renderer ytd-guide-entry-renderer a[title="Shorts"],
-      ytd-guide-section-renderer ytd-guide-entry-renderer a[href="/shorts"],
-      ytd-guide-entry-renderer a[title="Shorts"],
+      }`,
+    shortsGuideOnly: `
+      ytd-guide-entry-renderer:has(a[title="Shorts"]),
       ytd-guide-entry-renderer a[href="/shorts"],
+      ytd-mini-guide-entry-renderer:has(a[title="Shorts"]),
       ytd-mini-guide-entry-renderer a[href="/shorts"] {
         display: none !important;
-      }
-    `;
-
-    document.head.appendChild(sidemenuShortsStyleElement);
-    console.log("Sidemenu Shorts button hiding enabled (blockShortScroll)");
-  }
-}
-
-// ============ THEATER MODE MANAGEMENT ============
-
-function findTheaterButtonFast() {
-  const now = Date.now();
-  if (cachedTheaterButton && document.body.contains(cachedTheaterButton) && now - lastButtonFindTime < 5000) {
-    return cachedTheaterButton;
-  }
-  
-  // Try multiple selectors for the theater button
-  const selectors = [
-    '.ytp-size-button.ytp-button',
-    '.ytp-size-button',
-    'button.ytp-size-button',
-    '.html5-video-player .ytp-size-button',
-    'button[aria-label="Theater mode"]',
-    'button[data-tooltip-title="Theater mode"]'
-  ];
-  
-  for (const selector of selectors) {
-    const btn = document.querySelector(selector);
-    if (btn) {
-      console.log(`Found theater button with selector: ${selector}`);
-      cachedTheaterButton = btn;
-      lastButtonFindTime = now;
-      return btn;
-    }
-  }
-  
-  console.log("Theater button not found with any selector");
-  cachedTheaterButton = null;
-  return null;
-}
-
-function isTheaterModeActive() {
-  const watchFlexy = document.querySelector('ytd-watch-flexy');
-  if (watchFlexy) {
-    return watchFlexy.hasAttribute('theater');
-  }
-  return false;
-}
-
-function setTheaterModeInstant(enable) {
-  const isCurrentlyTheater = isTheaterModeActive();
-  
-  if (enable === isCurrentlyTheater) {
-    return true;
-  }
-  
-  // Only use the native YouTube button click method
-  const theaterButton = findTheaterButtonFast();
-  if (theaterButton) {
-    theaterButton.click();
-    return true;
-  }
-  
-  // If button not found, don't force theater mode with DOM manipulation
-  console.log("Theater button not found, skipping theater mode activation");
-  return false;
-}
-
-function saveOriginalTheaterState() {
-  originalTheaterStateBeforeEnable = isTheaterModeActive();
-}
-
-function restoreOriginalTheaterState() {
-  const currentState = isTheaterModeActive();
-  if (currentState !== originalTheaterStateBeforeEnable) {
-    setTheaterModeInstant(originalTheaterStateBeforeEnable);
-  }
-}
-
-// ============ VIDEO FEED HANDLING WITH CACHING (Fix #4) ============
-
-function findFeedElementFast() {
-  const now = Date.now();
-  if (cachedFeedElement && document.body.contains(cachedFeedElement) && now - lastFeedFindTime < 2000) {
-    return cachedFeedElement;
-  }
-  
-  const feedSelectors = [
-    '#secondary',
-    'ytd-watch-flexy #secondary',
-    '#related',
-    'ytd-secondary-column'
-  ];
-  
-  for (const selector of feedSelectors) {
-    try {
-      const element = document.querySelector(selector);
-      if (element && !element.closest('#primary')) {
-        cachedFeedElement = element;
-        lastFeedFindTime = now;
-        return element;
-      }
-    } catch(e) {}
-  }
-  
-  cachedFeedElement = null;
-  return null;
-}
-
-// Fix #4: Cached secondary columns getter
-function getSecondaryColumns() {
-  const now = Date.now();
-  if (cachedSecondaryColumns && now - lastColumnsFindTime < 1000) {
-    return cachedSecondaryColumns;
-  }
-  
-  cachedSecondaryColumns = document.querySelectorAll('[id*="secondary"], ytd-secondary-column');
-  lastColumnsFindTime = now;
-  return cachedSecondaryColumns;
-}
-
-function storeFeedDisplay(element) {
-  if (!element) return;
-  try {
-    const computedStyle = window.getComputedStyle(element);
-    feedOriginalDisplay = computedStyle.display !== 'none' ? computedStyle.display : 'block';
-  } catch(e) {
-    feedOriginalDisplay = 'block';
-  }
-}
-
-function handleVideoFeed() {
-  const feed = findFeedElementFast();
-  
-  if (settings.sidebar && settings.hideFeedMode === "remove") {
-    if (!isRemoveModeActive) {
-      enableRemoveMode(feed);
-    } else if (feed && feed.style.display !== 'none') {
-      feed.style.display = 'none';
-    }
-  } else if (settings.sidebar && settings.hideFeedMode === "hide") {
-    if (feed) {
-      enableHideMode(feed);
-    }
-  } else {
-    if (isRemoveModeActive || feedOriginalDisplay !== null) {
-      disableAllModes(feed);
-    }
-  }
-}
-
-function enableRemoveMode(feed) {
-  // Save original theater state when first enabling
-  if (!isRemoveModeActive) {
-    saveOriginalTheaterState();
-  }
-  
-  // Step 1: Enable theater mode using native YouTube button click only
-  const theaterButton = findTheaterButtonFast();
-  console.log("Theater button found:", !!theaterButton);
-  
-  if (theaterButton) {
-    const isCurrentlyTheater = isTheaterModeActive();
-    console.log("Currently in theater mode:", isCurrentlyTheater);
-    
-    if (!isCurrentlyTheater) {
-      console.log("Clicking theater button...");
-      theaterButton.click();
-      console.log("Theater button clicked");
-    }
-  } else {
-    console.log("Theater button not found, cannot enable theater mode");
-  }
-  
-  // Step 2: Hide the video feed using visibility/opacity instead of display:none
-  // This prevents the video from turning black
-  if (feed) {
-    if (feedOriginalDisplay === null) {
-      storeFeedDisplay(feed);
-    }
-    
-    // Ensure display is not none before hiding
-    if (feed.style.display === 'none') {
-      feed.style.display = feedOriginalDisplay || 'block';
-    }
-    
-    // Use visibility and opacity instead of display:none
-    feed.style.visibility = 'hidden';
-    feed.style.opacity = '0';
-    feed.style.pointerEvents = 'none';
-  }
-  
-  isRemoveModeActive = true;
-  console.log("Remove mode enabled");
-}
-
-function enableHideMode(feed) {
-  if (!feed) return;
-  
-  if (isRemoveModeActive) {
-    restoreOriginalTheaterState();
-    isRemoveModeActive = false;
-  }
-  
-  if (feedOriginalDisplay === null) {
-    storeFeedDisplay(feed);
-  }
-  
-  // Use display:none for hide mode (can cause black screen but user wants this behavior)
-  feed.style.display = 'none';
-  
-  console.log("Hide mode enabled");
-}
-
-function disableAllModes(feed) {
-  if (feed) {
-    feed.style.display = feedOriginalDisplay || '';
-    feed.style.visibility = '';
-    feed.style.opacity = '';
-    feed.style.pointerEvents = '';
-  }
-  
-  if (isRemoveModeActive) {
-    restoreOriginalTheaterState();
-  }
-  
-  isRemoveModeActive = false;
-  feedOriginalDisplay = null;
-  console.log("All modes disabled");
-}
-
-// ============ COMMENTS HANDLING (Fix #6) ============
-function handleComments() {
-  // Fix #6: More efficient selector with fallbacks
-  let comments = document.querySelector("#comments");
-  if (!comments) comments = document.querySelector("ytd-comments#comments");
-  if (!comments) comments = document.querySelector("ytd-comments");
-  if (comments) {
-    comments.style.display = settings.comments ? "none" : "";
-  }
-
-  // Hide comments button on YouTube Shorts
-  if (window.location.pathname.includes('/shorts/')) {
-    const commentsButton = document.querySelector('.ytSpecButtonViewModelHost.ytwReelActionBarViewModelHostDesktopActionButton');
-    if (commentsButton) {
-      commentsButton.style.display = settings.comments ? "none" : "";
-    }
-  }
-}
-
-// ============ NOTIFICATIONS HANDLING ============
-function handleNotifications() {
-  const notifications = document.querySelector('ytd-notification-topbar-button-renderer');
-  if (notifications) {
-    notifications.style.display = settings.removeNotifications ? "none" : "";
-  }
-}
-
-// ============ SPEED BLOCK WITH IMPROVED CLEANUP (Fix #2 & #7) ============
-function handleSpeed() {
-  // Fix #2: Proper cleanup of observers
-  if (speedObservers.length) {
-    speedObservers.forEach(obs => {
-      try {
-        if (obs && typeof obs.disconnect === 'function') {
-          obs.disconnect();
-          // Fix #8: Remove from active observers tracking
-          const index = activeMutationObservers.indexOf(obs);
-          if (index > -1) activeMutationObservers.splice(index, 1);
-        }
-      } catch(e) {}
-    });
-    speedObservers = [];
-  }
-  
-  // Fix #2: Clean up video event listeners properly
-  const allVideos = document.querySelectorAll("video");
-  allVideos.forEach(video => {
-    const handler = rateChangeHandlers.get(video);
-    if (handler) {
-      video.removeEventListener('ratechange', handler);
-      rateChangeHandlers.delete(video);
-      // Fix #8: Remove from active event listeners tracking
-      const listenerIndex = activeEventListeners.findIndex(el => el.element === video && el.handler === handler);
-      if (listenerIndex > -1) activeEventListeners.splice(listenerIndex, 1);
-    }
-    if (originalPlaybackRates.has(video)) {
-      video.playbackRate = originalPlaybackRates.get(video);
-      originalPlaybackRates.delete(video);
-    }
-  });
-  
-  if (!settings.speed) return;
-  
-  const enforceSpeed = (video) => {
-    if (!video) return;
-    if (!originalPlaybackRates.has(video)) {
-      originalPlaybackRates.set(video, video.playbackRate);
-    }
-    if (video.playbackRate !== 1) {
-      video.playbackRate = 1;
-    }
+      }`,
+    comments: `
+      ytd-comments#comments,
+      ytd-watch-flexy #comments,
+      ytd-reel-video-renderer #comments-button,
+      .ytwReelActionBarViewModelHostDesktopActionButton:has(button[aria-label*="omment"]) {
+        display: none !important;
+      }`,
+    notifications: `
+      ytd-notification-topbar-button-renderer {
+        display: none !important;
+      }`,
+    feedHide: `
+      ytd-watch-flexy #secondary {
+        display: none !important;
+      }`,
+    // visibility instead of display:none keeps the player from turning black
+    feedRemove: `
+      ytd-watch-flexy #secondary {
+        visibility: hidden !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+      }`
   };
-  
-  allVideos.forEach(video => {
-    enforceSpeed(video);
-    if (!rateChangeHandlers.has(video)) {
-      const handler = () => enforceSpeed(video);
-      video.addEventListener('ratechange', handler);
-      rateChangeHandlers.set(video, handler);
-      // Fix #8: Track active event listener
-      activeEventListeners.push({ element: video, handler, type: 'ratechange' });
+
+  function buildCss() {
+    const parts = [];
+    if (settings.shorts) parts.push(CSS.shorts);
+    else if (settings.blockShortScroll) parts.push(CSS.shortsGuideOnly);
+    if (settings.comments) parts.push(CSS.comments);
+    if (settings.removeNotifications) parts.push(CSS.notifications);
+    if (settings.sidebar) parts.push(settings.hideFeedMode === 'hide' ? CSS.feedHide : CSS.feedRemove);
+    return parts.join('\n');
+  }
+
+  function applyStyles() {
+    const css = buildCss();
+    let style = document.getElementById(STYLE_ID);
+    if (!css) {
+      style?.remove();
+      return;
+    }
+    if (!style) {
+      style = document.createElement('style');
+      style.id = STYLE_ID;
+      (document.head || document.documentElement).appendChild(style);
+    }
+    if (style.textContent !== css) style.textContent = css;
+  }
+
+  // ============ THEATER MODE ============
+  function isWatchPage() {
+    return location.pathname === '/watch';
+  }
+
+  function isTheaterModeActive() {
+    const watchFlexy = document.querySelector('ytd-watch-flexy');
+    return !!watchFlexy && watchFlexy.hasAttribute('theater');
+  }
+
+  function findTheaterButton() {
+    return document.querySelector('.ytp-size-button') ||
+           document.querySelector('button[data-tooltip-target-id="ytp-size-button"]');
+  }
+
+  // Click YouTube's own button (the player may not exist yet right after navigation)
+  function setTheaterMode(enable, attempt = 0) {
+    clearTimeout(theaterRetryTimer);
+    if (!isWatchPage()) return;
+    if (document.querySelector('ytd-watch-flexy') && isTheaterModeActive() === enable) return;
+
+    const button = findTheaterButton();
+    if (button && document.querySelector('ytd-watch-flexy')) {
+      button.click();
+      return;
+    }
+    if (attempt < 20) {
+      theaterRetryTimer = setTimeout(() => setTheaterMode(enable, attempt + 1), 250);
+    }
+  }
+
+  function updateTheaterMode() {
+    const wantRemoveMode = settings.sidebar && settings.hideFeedMode !== 'hide';
+
+    if (wantRemoveMode) {
+      if (!removeModeActive) {
+        removeModeActive = true;
+        originalTheaterState = isWatchPage() ? isTheaterModeActive() : null;
+      }
+      if (isWatchPage()) {
+        if (originalTheaterState === null) originalTheaterState = isTheaterModeActive();
+        setTheaterMode(true);
+      }
+    } else if (removeModeActive) {
+      removeModeActive = false;
+      if (originalTheaterState === false) setTheaterMode(false);
+      originalTheaterState = null;
+    }
+  }
+
+  // ============ SPEED BLOCK ============
+  // Caps playback above 1x back to 1x (slowing down is still allowed).
+  function enforceSpeed(media) {
+    if (settings.speed && media instanceof HTMLMediaElement && media.playbackRate > 1) {
+      media.playbackRate = 1;
+    }
+  }
+
+  function onMediaEvent(e) {
+    enforceSpeed(e.target);
+  }
+
+  // ratechange/play don't bubble, but capture-phase listeners on document still see them
+  ['ratechange', 'play', 'loadedmetadata'].forEach(type => {
+    document.addEventListener(type, onMediaEvent, true);
+  });
+
+  function applySpeed() {
+    if (settings.speed) document.querySelectorAll('video').forEach(enforceSpeed);
+  }
+
+  // ============ APPLY ============
+  function applyAllFeatures() {
+    applyStyles();
+    updateTheaterMode();
+    applySpeed();
+  }
+
+  chrome.storage.sync.get(SETTING_KEYS, (data) => {
+    settings = { ...settings, ...data };
+    applyAllFeatures();
+  });
+
+  let updateTimer = null;
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== 'sync') return;
+    let changed = false;
+    SETTING_KEYS.forEach(key => {
+      if (key in changes) {
+        settings[key] = changes[key].newValue;
+        changed = true;
+      }
+    });
+    if (changed) {
+      clearTimeout(updateTimer);
+      updateTimer = setTimeout(applyAllFeatures, 30);
     }
   });
-  
-  // Fix #7: Debounced mutation observer
-  const mutationHandler = (mutations) => {
-    mutations.forEach((mutation) => {
-      mutation.addedNodes.forEach((node) => {
-        if (node.nodeName === 'VIDEO') {
-          pendingVideos.add(node);
-        } else if (node.querySelectorAll) {
-          node.querySelectorAll('video').forEach(video => pendingVideos.add(video));
-        }
-      });
-    });
-  };
-  
-  const customObserver = new MutationObserver(mutationHandler);
-  customObserver.observe(document.body, { childList: true, subtree: true });
-  speedObservers.push(customObserver);
-  
-  // Fix #8: Track active observer
-  activeMutationObservers.push(customObserver);
-}
 
-// ============ NAVIGATION OBSERVERS ============
-
-function startObservers() {
-  if (window.__studyEnhancerObserversStarted) return;
-  window.__studyEnhancerObserversStarted = true;
-  
-  let lastUrl = location.href;
-  
-  // Fix #8: Store interval ID for cleanup
-  navigationCheckInterval = setInterval(() => {
-    const currentUrl = location.href;
-    if (currentUrl !== lastUrl && currentUrl.includes('youtube.com')) {
-      lastUrl = currentUrl;
-      
-      // Clear cache on navigation (Fix #4)
-      cachedFeedElement = null;
-      cachedTheaterButton = null;
-      cachedSecondaryColumns = null;
-      isRemoveModeActive = false;
-      feedOriginalDisplay = null;
-      
-      setTimeout(() => applyAllFeaturesOnce(), 100);
-    }
-  }, 200);
-  
-  // Fix #8: Track interval for cleanup
-  activeIntervals.push(navigationCheckInterval);
-  
-  // Fix #8: Track event listener for cleanup
-  const navigateHandler = () => {
-    cachedFeedElement = null;
-    cachedTheaterButton = null;
-    cachedSecondaryColumns = null;
-    isRemoveModeActive = false;
-    feedOriginalDisplay = null;
-    
-    applyAllFeaturesOnce();
-  };
-  
-  document.addEventListener('yt-navigate-finish', navigateHandler);
-  activeEventListeners.push({ element: document, handler: navigateHandler, type: 'yt-navigate-finish' });
-}
-
-// ============ FIX #8: COMPREHENSIVE CLEANUP FUNCTION ============
-function cleanup() {
-  console.log("Starting comprehensive cleanup...");
-  
-  // 1. Disconnect all mutation observers
-  if (activeMutationObservers.length) {
-    activeMutationObservers.forEach(obs => {
-      try {
-        if (obs && typeof obs.disconnect === 'function') {
-          obs.disconnect();
-        }
-      } catch(e) {
-        console.warn("Error disconnecting observer:", e);
-      }
-    });
-    activeMutationObservers = [];
-  }
-  
-  // Also clean up speedObservers array
-  if (speedObservers.length) {
-    speedObservers.forEach(obs => {
-      try {
-        if (obs && typeof obs.disconnect === 'function') {
-          obs.disconnect();
-        }
-      } catch(e) {}
-    });
-    speedObservers = [];
-  }
-  
-  // 2. Clear all intervals
-  if (activeIntervals.length) {
-    activeIntervals.forEach(interval => {
-      try {
-        clearInterval(interval);
-      } catch(e) {
-        console.warn("Error clearing interval:", e);
-      }
-    });
-    activeIntervals = [];
-  }
-  
-  // Clear navigation check interval if exists
-  if (navigationCheckInterval) {
-    clearInterval(navigationCheckInterval);
-    navigationCheckInterval = null;
-  }
-  
-  // 3. Remove all event listeners
-  if (activeEventListeners.length) {
-    activeEventListeners.forEach(listener => {
-      try {
-        if (listener.element && listener.element.removeEventListener) {
-          listener.element.removeEventListener(listener.type, listener.handler);
-        }
-      } catch(e) {
-        console.warn("Error removing event listener:", e);
-      }
-    });
-    activeEventListeners = [];
-  }
-  
-  // 4. Clear all timers
-  if (debounceTimer) {
-    clearTimeout(debounceTimer);
-    debounceTimer = null;
-  }
-  
-  if (updateTimer) {
-    clearTimeout(updateTimer);
-    updateTimer = null;
-  }
-  
-  if (resizeTimeout) {
-    clearTimeout(resizeTimeout);
-    resizeTimeout = null;
-  }
-  
-  // 5. Clear pending videos set
-  if (pendingVideos.size) {
-    pendingVideos.clear();
-  }
-  
-  // 6. Remove all video event listeners
-  const allVideos = document.querySelectorAll("video");
-  allVideos.forEach(video => {
-    const handler = rateChangeHandlers.get(video);
-    if (handler) {
-      video.removeEventListener('ratechange', handler);
-    }
-  });
-  
-  // 7. Clear WeakMaps (they'll be garbage collected, but we can help by clearing references)
-  rateChangeHandlers = new WeakMap();
-  originalPlaybackRates = new WeakMap();
-  
-  // 8. Remove injected styles
-  if (shortsStyleElement) {
-    try {
-      shortsStyleElement.remove();
-    } catch(e) {}
-    shortsStyleElement = null;
-  }
-  
-  // Remove any other injected styles
-  const styleElements = document.querySelectorAll('#study-enhancer-hide-shorts');
-  styleElements.forEach(el => {
-    try {
-      el.remove();
-    } catch(e) {}
-  });
-  
-  // 9. Restore feed visibility
-  const feed = findFeedElementFast();
-  if (feed) {
-    try {
-      disableAllModes(feed);
-    } catch(e) {
-      // Fallback manual restoration
-      feed.style.display = '';
-      feed.style.visibility = '';
-      feed.style.opacity = '';
-      feed.style.pointerEvents = '';
-    }
-  }
-  
-  // Restore secondary columns
-  const secondaryColumns = getSecondaryColumns();
-  for (const col of secondaryColumns) {
-    try {
-      col.style.display = '';
-    } catch(e) {}
-  }
-  
-  // 10. Restore theater mode
-  try {
-    restoreOriginalTheaterState();
-  } catch(e) {}
-  
-  // 11. Reset all state variables
-  isRemoveModeActive = false;
-  feedOriginalDisplay = null;
-  cachedFeedElement = null;
-  cachedTheaterButton = null;
-  cachedSecondaryColumns = null;
-  lastFeedFindTime = 0;
-  lastButtonFindTime = 0;
-  lastColumnsFindTime = 0;
-  
-  // 12. Reset initialization flag if needed (will re-init on next run)
-  window.__studyEnhancerObserversStarted = false;
-  
-  console.log("Cleanup completed successfully");
-}
-
-// ============ FIX #8: PAGE BEFOREUNLOAD CLEANUP ============
-// Clean up when page is about to unload
-window.addEventListener('beforeunload', () => {
-  cleanup();
-});
-
-// ============ FIX #8: EXTENSION DISABLE/CONTEXT INVALIDATION ============
-// Listen for extension context invalidation (when extension is reloaded/disabled)
-if (typeof chrome !== 'undefined' && chrome.runtime) {
-  // Detect when extension context is invalidated
-  const keepAliveInterval = setInterval(() => {
-    try {
-      if (chrome.runtime && chrome.runtime.id) {
-        // Extension still alive
-      } else {
-        throw new Error('Extension context invalidated');
-      }
-    } catch(e) {
-      // Extension was disabled or reloaded, clean up
-      console.log("Extension context invalidated, cleaning up...");
-      clearInterval(keepAliveInterval);
-      cleanup();
-    }
-  }, 1000);
-  
-  activeIntervals.push(keepAliveInterval);
-}
-
-// ============ FIX #8: MUTATION OBSERVER FOR DYNAMIC CONTENT CLEANUP ============
-// Watch for YouTube's SPA navigation that might leave stale state
-const cleanupObserver = new MutationObserver((mutations) => {
-  // Check if we're on a completely new page (major DOM change)
-  let shouldCleanup = false;
-  
-  for (const mutation of mutations) {
-    if (mutation.type === 'childList' && mutation.target === document.body) {
-      // If body gets replaced or major children change, might need cleanup
-      if (mutation.removedNodes.length > 10) { // Large DOM change
-        shouldCleanup = true;
-        break;
-      }
-    }
-  }
-  
-  if (shouldCleanup) {
-    console.log("Major DOM change detected, performing partial cleanup");
-    // Don't full cleanup, just reset caches
-    cachedFeedElement = null;
-    cachedTheaterButton = null;
-    cachedSecondaryColumns = null;
-  }
-});
-
-cleanupObserver.observe(document.body, { childList: true, subtree: false });
-activeMutationObservers.push(cleanupObserver);
-
-// ============ INITIALIZE ============
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => {
-    init();
-    startObservers();
-  });
-} else {
-  init();
-  startObservers();
-}
-
-// Expose cleanup for potential use (optional)
-if (typeof window !== 'undefined') {
-  window.YouTubeStudyEnhancer = { cleanup, settings: () => ({ ...settings }) };
-}
-
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { cleanup };
-}
+  // YouTube is a SPA: re-apply theater mode / speed after each in-app navigation.
+  document.addEventListener('yt-navigate-finish', applyAllFeatures);
+})();

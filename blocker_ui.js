@@ -2,31 +2,42 @@ document.addEventListener("DOMContentLoaded", () => {
   // --- Loading Screen Logic ---
   const loadingScreen = document.getElementById('loading-screen');
 
-  // Check if this is the first load using localStorage
-  const hasLoadedBefore = localStorage.getItem('blockerInitialized');
+  // The first-run loading screen stays up until the page is actually ready
+  // (background shown, music list loaded, page resources loaded) instead of
+  // a fixed 2 seconds. See the "Initialization" section for what it waits on.
+  const loadingText = loadingScreen ? loadingScreen.querySelector('.loading-text') : null;
+  const isFirstLoad = !localStorage.getItem('blockerInitialized');
+  const LOADING_TIMEOUT_MS = 20000; // never leave the user stuck behind the loader
 
-  if (!hasLoadedBefore) {
-    // Show loading screen for first-time initialization
+  if (loadingScreen) {
+    loadingScreen.style.display = isFirstLoad ? 'flex' : 'none';
+  }
+
+  // Reveal the page (it starts hidden via html.bg-pending). On the first run the
+  // loading screen covers everything, so reveal straight away.
+  const REVEAL_TIMEOUT_MS = 1500;
+  function revealPage() {
+    document.documentElement.classList.remove('bg-pending');
+  }
+  if (isFirstLoad) revealPage();
+  else setTimeout(revealPage, REVEAL_TIMEOUT_MS);
+
+  function setLoadingText(text) {
+    if (isFirstLoad && loadingText) loadingText.textContent = text;
+  }
+
+  let loadingScreenHidden = !isFirstLoad;
+  function hideLoadingScreen(completed) {
+    if (loadingScreenHidden) return;
+    loadingScreenHidden = true;
+    // Only remember the first run as done once it actually finished, so an
+    // interrupted first load shows the loader again next time.
+    if (completed) localStorage.setItem('blockerInitialized', 'true');
     if (loadingScreen) {
-      loadingScreen.style.display = 'flex';
-    }
-
-    // Mark as initialized
-    localStorage.setItem('blockerInitialized', 'true');
-
-    // Hide loading screen after initialization (2 seconds)
-    setTimeout(() => {
-      if (loadingScreen) {
-        loadingScreen.classList.add('hidden');
-        setTimeout(() => {
-          loadingScreen.style.display = 'none';
-        }, 500);
-      }
-    }, 2000);
-  } else {
-    // Hide loading screen immediately if already initialized
-    if (loadingScreen) {
-      loadingScreen.style.display = 'none';
+      loadingScreen.classList.add('hidden');
+      setTimeout(() => {
+        loadingScreen.style.display = 'none';
+      }, 500);
     }
   }
 
@@ -236,10 +247,15 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // --- Chime Sound ---
+  // One shared AudioContext: creating a new one per chime leaks them, and
+  // Chrome caps how many can exist at once.
+  let sharedAudioContext = null;
   function playChime(frequency = 392) {
-    const audioContext = new (
-      window.AudioContext || window.webkitAudioContext
-    )();
+    if (!sharedAudioContext) {
+      sharedAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    const audioContext = sharedAudioContext;
+    if (audioContext.state === "suspended") audioContext.resume();
 
     // Create a chime with specified frequency
     const oscillator = audioContext.createOscillator();
@@ -313,7 +329,9 @@ document.addEventListener("DOMContentLoaded", () => {
       blob: blob,
       isGitHub: isGitHub,
       lastUsed: Date.now(),
-      url: existing?.url || (isGitHub ? null : URL.createObjectURL(blob)),
+      // Only GitHub presets keep a (remote) URL; blob: URLs die with the page, so
+      // persisting them was useless and leaked a URL on every save.
+      url: isGitHub ? existing?.url || null : null,
     };
 
     store.put(backgroundData);
@@ -324,11 +342,28 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  function createBlobUrl(blob) {
-    return URL.createObjectURL(blob);
+  // One object URL per background id, reused across gallery renders / previews
+  // (previously every render created new blob URLs that were never revoked).
+  const bgUrlCache = new Map();
+  function getBackgroundUrl(bg) {
+    if (bg.blob) {
+      let url = bgUrlCache.get(bg.id);
+      if (!url) {
+        url = URL.createObjectURL(bg.blob);
+        bgUrlCache.set(bg.id, url);
+      }
+      return url;
+    }
+    return bg.url;
   }
 
-  async function deleteBackground(id) {
+  async function deleteBackground(id, isGitHub = false) {
+    if (isGitHub) rememberDeletedPreset(id);
+    const cachedUrl = bgUrlCache.get(id);
+    if (cachedUrl && cachedUrl !== currentBlobUrl) {
+      URL.revokeObjectURL(cachedUrl);
+      bgUrlCache.delete(id);
+    }
     const db = await getDB();
     const tx = db.transaction(storeName, "readwrite");
     const store = tx.objectStore(storeName);
@@ -409,14 +444,14 @@ document.addEventListener("DOMContentLoaded", () => {
   let activePseudo = 1; // Track which pseudo-element is currently active (1 or 2)
 
   async function applyBackground(backgroundData) {
-    if (currentBlobUrl && !backgroundData.isGitHub)
-      URL.revokeObjectURL(currentBlobUrl);
-
-    if (backgroundData.isGitHub) {
-      currentBlobUrl = backgroundData.url;
-    } else {
-      currentBlobUrl = createBlobUrl(backgroundData.blob);
+    // Built-in presets are downloaded the first time they're picked
+    try {
+      backgroundData = await ensurePresetBlob(backgroundData);
+    } catch (e) {
+      console.error("Error downloading background:", e);
+      return;
     }
+    currentBlobUrl = getBackgroundUrl(backgroundData);
 
     const gradient = 'linear-gradient(rgba(26, 21, 44, 0.45), rgba(15, 12, 28, 0.65))';
     const newBgImage = `${gradient}, url(${currentBlobUrl})`;
@@ -448,56 +483,145 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // --- GitHub Preset Fetching ---
-  async function fetchPresets() {
+  // Presets are listed from GitHub once (and re-checked weekly for new ones).
+  // Only the default preset is downloaded up front; the rest are stored as
+  // metadata and downloaded the first time you pick them in the gallery.
+  const PRESETS_LISTED_KEY = "presetsListedAt";
+  const DELETED_PRESETS_KEY = "deletedPresets";
+  const PRESET_RELIST_MS = 7 * 24 * 60 * 60 * 1000;
+  const PRESET_FILE_PATTERN = /\.(jpe?g|png|webp)$/i;
+
+  // "comet.jpg" and "comet.webp" are the same preset
+  function presetKey(name) {
+    return String(name).replace(/\.[^.]+$/, "").toLowerCase();
+  }
+
+  function getDeletedPresets() {
     try {
-      const db = await getDB();
-      const tx = db.transaction(storeName, "readonly");
-      const store = tx.objectStore(storeName);
-      const allBackgrounds = await new Promise((resolve, reject) => {
-        const req = store.getAll();
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
+      return new Set(JSON.parse(localStorage.getItem(DELETED_PRESETS_KEY)) || []);
+    } catch {
+      return new Set();
+    }
+  }
+
+  function rememberDeletedPreset(id) {
+    const deleted = getDeletedPresets();
+    deleted.add(presetKey(id));
+    localStorage.setItem(DELETED_PRESETS_KEY, JSON.stringify([...deleted]));
+  }
+
+  async function getAllBackgrounds() {
+    const db = await getDB();
+    const tx = db.transaction(storeName, "readonly");
+    return new Promise((resolve, reject) => {
+      const req = tx.objectStore(storeName).getAll();
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  async function putBackgrounds(records) {
+    const db = await getDB();
+    const tx = db.transaction(storeName, "readwrite");
+    const store = tx.objectStore(storeName);
+    records.forEach((record) => store.put(record));
+    await new Promise((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+
+  async function downloadPresetBlob(url) {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+    return res.blob();
+  }
+
+  // Make sure a preset's image is stored locally (downloads it on first use).
+  async function ensurePresetBlob(bg) {
+    if (bg.blob || !bg.isGitHub || !bg.url) return bg;
+    const withBlob = { ...bg, blob: await downloadPresetBlob(bg.url) };
+    await putBackgrounds([withBlob]);
+    return withBlob;
+  }
+
+  // Returns { downloaded: true } when the default preset was just downloaded
+  // (first run), so the caller can show it.
+  async function fetchPresets() {
+    const none = { downloaded: false };
+    try {
+      const all = await getAllBackgrounds();
+      const stored = all.filter((bg) => bg.isGitHub);
+      const listedAt = parseInt(localStorage.getItem(PRESETS_LISTED_KEY), 10) || 0;
+
+      // Installs from before this change already have every preset downloaded.
+      if (!listedAt && stored.length > 0) {
+        localStorage.setItem(PRESETS_LISTED_KEY, String(Date.now()));
+        return none;
+      }
+
+      const firstRun = !listedAt;
+      if (!firstRun && Date.now() - listedAt < PRESET_RELIST_MS) return none;
+
+      if (firstRun) setLoadingText("Downloading background...");
+      const response = await fetch(
+        "https://api.github.com/repos/reapertakumi/YouTube-Study-Enhancer/contents/BG",
+      );
+      if (!response.ok) return none; // try again next time
+      const listing = await response.json();
+
+      // One entry per preset, preferring .webp when both formats exist.
+      const byKey = new Map();
+      (Array.isArray(listing) ? listing : [])
+        .filter((file) => file.type === "file" && PRESET_FILE_PATTERN.test(file.name))
+        .forEach((file) => {
+          const key = presetKey(file.name);
+          const current = byKey.get(key);
+          if (!current || /\.webp$/i.test(file.name)) byKey.set(key, file);
+        });
+      const files = [...byKey.values()];
+
+      const deleted = getDeletedPresets();
+      const storedKeys = new Set(stored.map((bg) => presetKey(bg.id)));
+      const missing = files.filter((file) => {
+        const key = presetKey(file.name);
+        return !deleted.has(key) && !storedKeys.has(key);
       });
 
-      // Check if GitHub backgrounds are already stored
-      const githubBackgrounds = allBackgrounds.filter((bg) => bg.isGitHub);
+      const now = Date.now();
+      const records = missing.map((file, index) => ({
+        id: file.name,
+        blob: null,
+        isGitHub: true,
+        // Newly found presets go after everything already used.
+        lastUsed: firstRun ? now - (missing.length - index) : index,
+        url: file.download_url,
+      }));
 
-      if (githubBackgrounds.length === 0) {
-        // Fetch and store GitHub backgrounds
-        const response = await fetch(
-          "https://api.github.com/repos/reapertakumi/YouTube-Study-Enhancer/contents/BG",
-        );
-        const files = await response.json();
-
-        for (const file of files) {
-          if (file.type === "file" && file.name.match(/\.(jpg|png|jpeg)$/i)) {
-            const res = await fetch(file.download_url);
-            const blob = await res.blob();
-            const backgroundData = {
-              id: file.name,
-              blob: blob,
-              isGitHub: true,
-              lastUsed: Date.now(),
-              url: file.download_url,
-            };
-            const db = await getDB();
-            const tx = db.transaction(storeName, "readwrite");
-            tx.objectStore(storeName).put(backgroundData);
-            await new Promise((resolve, reject) => {
-              tx.oncomplete = () => resolve();
-              tx.onerror = () => reject(tx.error);
-            });
-          }
+      // Presets not downloaded yet should follow renamed files (e.g. .jpg -> .webp),
+      // otherwise picking them would hit a link that no longer exists.
+      stored.forEach((bg) => {
+        const file = byKey.get(presetKey(bg.id));
+        if (!bg.blob && file && file.download_url !== bg.url) {
+          records.push({ ...bg, url: file.download_url });
         }
+      });
 
-        // Reload backgrounds after saving
-        return loadBackgrounds();
-      } else {
-        // Load existing backgrounds from IndexedDB
-        loadBackgrounds();
+      let downloaded = false;
+      if (firstRun && records.length > 0) {
+        // The last file in the listing has always been the default preset.
+        const defaultRecord = records[records.length - 1];
+        defaultRecord.blob = await downloadPresetBlob(defaultRecord.url);
+        defaultRecord.lastUsed = now;
+        downloaded = true;
       }
+
+      if (records.length > 0) await putBackgrounds(records);
+      localStorage.setItem(PRESETS_LISTED_KEY, String(now));
+      return { downloaded };
     } catch (e) {
       console.error("Error loading presets:", e);
+      return none;
     }
   }
 
@@ -526,7 +650,7 @@ document.addEventListener("DOMContentLoaded", () => {
         builtInBackgrounds.forEach((bg) => {
           const option = document.createElement("div");
           option.className = "bg-option";
-          option.style.backgroundImage = `url(${bg.url})`;
+          option.style.backgroundImage = `url(${getBackgroundUrl(bg)})`;
           option.dataset.id = bg.id;
 
           option.onclick = async () => {
@@ -539,7 +663,7 @@ document.addEventListener("DOMContentLoaded", () => {
           removeBtn.textContent = "×";
           removeBtn.onclick = async (e) => {
             e.stopPropagation();
-            await deleteBackground(bg.id);
+            await deleteBackground(bg.id, true);
             await loadBackgrounds();
           };
           option.appendChild(removeBtn);
@@ -555,8 +679,7 @@ document.addEventListener("DOMContentLoaded", () => {
         customBackgrounds.forEach((bg) => {
           const option = document.createElement("div");
           option.className = "bg-option";
-          const blobUrl = createBlobUrl(bg.blob);
-          option.style.backgroundImage = `url(${blobUrl})`;
+          option.style.backgroundImage = `url(${getBackgroundUrl(bg)})`;
           option.dataset.id = bg.id;
 
           option.onclick = async () => {
@@ -591,12 +714,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const bgPreview = document.getElementById("bg-preview");
     if (!bgPreview) return;
 
-    if (bg.isGitHub) {
-      bgPreview.style.backgroundImage = `url(${bg.url})`;
-    } else {
-      const blobUrl = createBlobUrl(bg.blob);
-      bgPreview.style.backgroundImage = `url(${blobUrl})`;
-    }
+    bgPreview.style.backgroundImage = `url(${getBackgroundUrl(bg)})`;
 
     // Update active state in galleries
     document.querySelectorAll(".bg-option").forEach(option => {
@@ -637,11 +755,19 @@ document.addEventListener("DOMContentLoaded", () => {
       playChime(392); // G4 for break
     }
 
+    // Count down against a fixed end time: setInterval ticks drift and are
+    // throttled in background tabs, which made the timer run slow.
+    const endTime = Date.now() + timeLeft * 1000;
+    clearInterval(timerId);
     timerId = setInterval(() => {
-      if (timeLeft > 0) {
-        timeLeft--;
-        updateDisplay();
+      const remaining = Math.max(0, Math.round((endTime - Date.now()) / 1000));
+      if (remaining > 0) {
+        if (remaining !== timeLeft) {
+          timeLeft = remaining;
+          updateDisplay();
+        }
       } else {
+        timeLeft = 0;
         clearInterval(timerId);
         isRunning = false;
         startBtn.textContent = "start";
@@ -665,13 +791,27 @@ document.addEventListener("DOMContentLoaded", () => {
           startTimer();
         }
       }
-    }, 1000);
+    }, 250);
+  }
+
+  function pauseTimer() {
+    clearInterval(timerId);
+    isRunning = false;
+    startBtn.textContent = "start";
+    updateDisplay();
   }
 
   function updateModeDurations() {
-    if (pomodoroInput) pomodoroDuration = parseInt(pomodoroInput.value);
-    if (shortInput) shortBreakDuration = parseInt(shortInput.value);
-    if (longInput) longBreakDuration = parseInt(longInput.value);
+    // Empty / invalid inputs used to produce NaN and show "NaN:NaN"
+    const readMinutes = (input, fallback) => {
+      const value = parseInt(input.value, 10);
+      const minutes = Number.isFinite(value) && value > 0 ? Math.min(value, 600) : fallback;
+      input.value = minutes;
+      return minutes;
+    };
+    if (pomodoroInput) pomodoroDuration = readMinutes(pomodoroInput, pomodoroDuration);
+    if (shortInput) shortBreakDuration = readMinutes(shortInput, shortBreakDuration);
+    if (longInput) longBreakDuration = readMinutes(longInput, longBreakDuration);
 
     const pomodoroBtn = document.querySelector('[data-mode="pomodoro"]');
     const shortBtn = document.querySelector('[data-mode="short"]');
@@ -1178,6 +1318,7 @@ document.addEventListener("DOMContentLoaded", () => {
   modeBtns.forEach(
     (btn) =>
       (btn.onclick = (e) => {
+        if (isRunning) pauseTimer();
         modeBtns.forEach((b) => b.classList.remove("active"));
         e.target.classList.add("active");
         timeLeft = parseInt(e.target.dataset.time);
@@ -1216,13 +1357,9 @@ document.addEventListener("DOMContentLoaded", () => {
   // Update indicator on window resize
   window.addEventListener("resize", updateModeIndicator);
 
-  startBtn.onclick = () =>
-    isRunning
-      ? clearInterval(timerId) ||
-        (isRunning = false) ||
-        (startBtn.textContent = "start") ||
-        updateDisplay()
-      : startTimer();
+  // (The old one-liner short-circuited before updateDisplay(), leaving the
+  // countdown in the tab title after pausing.)
+  startBtn.onclick = () => (isRunning ? pauseTimer() : startTimer());
   resetBtn.onclick = () => {
     clearInterval(timerId);
     isRunning = false;
@@ -1999,60 +2136,65 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // --- Initialization ---
-  getDB().then(async (db) => {
+  async function applyMostRecentBackground() {
+    const db = await getDB();
     const tx = db.transaction(storeName, "readonly");
-    const store = tx.objectStore(storeName);
     const allBackgrounds = await new Promise((resolve, reject) => {
-      const req = store.getAll();
+      const req = tx.objectStore(storeName).getAll();
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => reject(req.error);
     });
+    if (allBackgrounds.length === 0) return false;
 
-    // Sort by last used and apply the most recent one
-    if (allBackgrounds.length > 0) {
-      allBackgrounds.sort((a, b) => b.lastUsed - a.lastUsed);
-      const mostRecent = allBackgrounds[0];
+    allBackgrounds.sort((a, b) => b.lastUsed - a.lastUsed);
+    // Falls back to the remote URL if the download fails (e.g. offline)
+    const mostRecent = await ensurePresetBlob(allBackgrounds[0]).catch(() => allBackgrounds[0]);
+    const url = getBackgroundUrl(mostRecent);
 
-      // Apply background immediately without transition on load
-      if (mostRecent.isGitHub) {
-        currentBlobUrl = mostRecent.url;
-      } else {
-        currentBlobUrl = createBlobUrl(mostRecent.blob);
-      }
-      const gradient = 'linear-gradient(rgba(26, 21, 44, 0.45), rgba(15, 12, 28, 0.65))';
-      const newBgImage = `${gradient}, url(${currentBlobUrl})`;
-      document.documentElement.style.setProperty('--bg-image-1', newBgImage);
-      document.documentElement.style.setProperty('--bg-opacity-1', '1');
+    // Decode before swapping it in, so it appears in one go instead of
+    // painting progressively (and so the loader knows it's really ready).
+    // Capped: Chrome can defer decoding while the tab is in the background.
+    try {
+      const img = new Image();
+      img.src = url;
+      await Promise.race([
+        img.decode(),
+        new Promise((resolve) => setTimeout(resolve, 3000)),
+      ]);
+    } catch (e) {
+      // Still apply it; the browser will just render it when it can.
     }
-  });
-  // Fetch presets first, then load backgrounds
-  fetchPresets().then(() => {
-    // After presets are loaded, apply the most recent background again
-    getDB().then(async (db) => {
-      const tx = db.transaction(storeName, "readonly");
-      const store = tx.objectStore(storeName);
-      const allBackgrounds = await new Promise((resolve, reject) => {
-        const req = store.getAll();
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
-      });
 
-      if (allBackgrounds.length > 0) {
-        allBackgrounds.sort((a, b) => b.lastUsed - a.lastUsed);
-        const mostRecent = allBackgrounds[0];
+    currentBlobUrl = url;
+    const gradient = 'linear-gradient(rgba(26, 21, 44, 0.45), rgba(15, 12, 28, 0.65))';
+    document.documentElement.style.setProperty('--bg-image-1', `${gradient}, url(${currentBlobUrl})`);
+    document.documentElement.style.setProperty('--bg-opacity-1', '1');
+    return true;
+  }
 
-        if (mostRecent.isGitHub) {
-          currentBlobUrl = mostRecent.url;
-        } else {
-          currentBlobUrl = createBlobUrl(mostRecent.blob);
-        }
-        const gradient = 'linear-gradient(rgba(26, 21, 44, 0.45), rgba(15, 12, 28, 0.65))';
-        const newBgImage = `${gradient}, url(${currentBlobUrl})`;
-        document.documentElement.style.setProperty('--bg-image-1', newBgImage);
-        document.documentElement.style.setProperty('--bg-opacity-1', '1');
+  // Apply the saved background straight from IndexedDB. On the first run there
+  // is none yet: download the default preset first, show it, and let the other
+  // presets keep downloading in the background (the gallery is only rendered
+  // when the settings modal opens).
+  const backgroundReady = (async () => {
+    try {
+      if (await applyMostRecentBackground()) {
+        // Background is on screen; check GitHub for preset changes (weekly)
+        // without holding up the page.
+        fetchPresets();
+        return;
       }
-    });
-  });
+      const presets = await fetchPresets();
+      if (presets.downloaded) {
+        setLoadingText("Applying background...");
+        await applyMostRecentBackground();
+      }
+    } catch (e) {
+      console.error("Error applying background:", e);
+    } finally {
+      revealPage();
+    }
+  })();
 
   // Load all settings from localStorage
   if (preferredBreakSelect) preferredBreakSelect.value = preferredBreak;
@@ -2103,139 +2245,86 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-  // --- Ambient Sound Caching ---
-  
-  async function cacheAmbientSounds() {
-    const ambientItems = document.querySelectorAll(".ambient-item");
-    
-    for (const item of ambientItems) {
-      const audio = item.querySelector("audio");
-      if (!audio || !audio.src) continue;
-      
-      const soundName = item.querySelector(".ambient-text").textContent.toLowerCase();
-      const cacheKey = `ambient_${soundName}`;
-      
-      // Check if already cached
-      try {
-        const db = await getDB();
-        const tx = db.transaction(ambientStoreName, "readonly");
-        const store = tx.objectStore(ambientStoreName);
-        const cached = await new Promise((resolve, reject) => {
-          const req = store.get(cacheKey);
-          req.onsuccess = () => resolve(req.result);
-          req.onerror = () => reject(req.error);
-        });
-        
-        if (cached) {
-          // Use cached blob URL
-          audio.src = URL.createObjectURL(cached.blob);
-          continue;
-        }
-        
-        // Fetch and cache the sound
-        const response = await fetch(audio.src);
-        const blob = await response.blob();
-        
-        const saveTx = db.transaction(ambientStoreName, "readwrite");
-        const saveStore = saveTx.objectStore(ambientStoreName);
-        saveStore.put({
-          id: cacheKey,
-          blob: blob,
-          cachedAt: Date.now()
-        });
-        
-        await new Promise((resolve, reject) => {
-          saveTx.oncomplete = () => resolve();
-          saveTx.onerror = () => reject(saveTx.error);
-        });
-        
-        // Update audio source to use cached blob
+  // --- Ambient Sounds ---
+  // Sounds are cached in IndexedDB lazily, the first time each one is played.
+  // (Previously every sound was downloaded and loaded into memory on page load,
+  // defeating preload="none".)
+  async function getCachedAmbientBlob(cacheKey) {
+    const db = await getDB();
+    const tx = db.transaction(ambientStoreName, "readonly");
+    return new Promise((resolve, reject) => {
+      const req = tx.objectStore(ambientStoreName).get(cacheKey);
+      req.onsuccess = () => resolve(req.result ? req.result.blob : null);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  async function cacheAmbientBlob(cacheKey, url) {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const blob = await response.blob();
+    const db = await getDB();
+    const tx = db.transaction(ambientStoreName, "readwrite");
+    tx.objectStore(ambientStoreName).put({ id: cacheKey, blob, cachedAt: Date.now() });
+    await new Promise((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+
+  async function prepareAmbientAudio(item, audio) {
+    if (audio.dataset.prepared) return;
+    audio.dataset.prepared = "true";
+    const label = item.querySelector(".ambient-text");
+    if (!label) return; // only the ambient (non-frequency) sounds are cached
+
+    const cacheKey = `ambient_${label.textContent.toLowerCase()}`;
+    const remoteSrc = audio.src;
+    try {
+      const blob = await getCachedAmbientBlob(cacheKey);
+      if (blob) {
         audio.src = URL.createObjectURL(blob);
-      } catch (error) {
-        console.error(`Error caching ambient sound ${soundName}:`, error);
+      } else {
+        // Play from the network now; store a copy for next time.
+        cacheAmbientBlob(cacheKey, remoteSrc).catch((err) =>
+          console.error(`Error caching ambient sound ${cacheKey}:`, err),
+        );
       }
+    } catch (error) {
+      console.error(`Error loading cached ambient sound ${cacheKey}:`, error);
     }
   }
-  
-  // Initialize ambient sound caching
-  cacheAmbientSounds();
 
-  // Handle page 1 ambient items (old layout)
-  const ambientItems = document.querySelectorAll(".ambient-item");
-
-  ambientItems.forEach((item) => {
+  // Page 1 ambient items and page 2 frequency (brainwave) items share the same behaviour
+  document.querySelectorAll(".ambient-item, .frequency-item").forEach((item) => {
     const slider = item.querySelector(".ambient-slider");
     const audio = item.querySelector("audio");
 
-    item.addEventListener("click", (e) => {
+    item.addEventListener("click", async (e) => {
       // Prevent toggling if the user is clicking/dragging the slider
       if (e.target === slider) return;
 
       item.classList.toggle("active");
+      if (!audio) return;
 
       if (item.classList.contains("active")) {
-        // Play audio and set volume to slider's current value
-        if (audio) {
-          audio.volume = slider.value;
-          audio
-            .play()
-            .catch((err) =>
-              console.log("Audio requires actual file source to play.", err),
-            );
-        }
+        await prepareAmbientAudio(item, audio);
+        if (!item.classList.contains("active")) return; // toggled off meanwhile
+        audio.volume = slider.value;
+        audio
+          .play()
+          .catch((err) => console.warn("Audio could not be played.", err));
       } else {
-        // Stop audio
-        if (audio) {
-          audio.pause();
-        }
+        audio.pause();
       }
     });
 
     // Update volume live as the slider moves
-    slider.addEventListener("input", (e) => {
-      if (audio) {
-        audio.volume = e.target.value;
-      }
-    });
-  });
-
-  // Handle page 2 frequency items (new brainwave layout)
-  const frequencyItems = document.querySelectorAll(".frequency-item");
-
-  frequencyItems.forEach((item) => {
-    const slider = item.querySelector(".ambient-slider");
-    const audio = item.querySelector("audio");
-
-    item.addEventListener("click", (e) => {
-      // Prevent toggling if the user is clicking/dragging the slider
-      if (e.target === slider) return;
-
-      item.classList.toggle("active");
-
-      if (item.classList.contains("active")) {
-        // Play audio and set volume to slider's current value
-        if (audio) {
-          audio.volume = slider.value;
-          audio
-            .play()
-            .catch((err) =>
-              console.log("Audio requires actual file source to play.", err),
-            );
-        }
-      } else {
-        // Stop audio
-        if (audio) {
-          audio.pause();
-        }
-      }
-    });
-
-    // Update volume live as the slider moves
-    slider.addEventListener("input", (e) => {
-      if (audio) {
-        audio.volume = e.target.value;
-      }
-    });
+    if (slider) {
+      slider.addEventListener("input", (e) => {
+        if (audio) audio.volume = e.target.value;
+      });
+    }
   });
 
   // --- GitHub Music Player Logic ---
@@ -2267,6 +2356,7 @@ document.addEventListener("DOMContentLoaded", () => {
   if (isLooping) {
     loopBtn.classList.add("active");
   }
+  musicAudio.loop = isLooping; // the saved state was shown but never applied
 
   // Load saved volume from localStorage
   const savedVolume = localStorage.getItem("musicVolume");
@@ -2278,11 +2368,18 @@ document.addEventListener("DOMContentLoaded", () => {
     volumeSlider.value = 0.8;
   }
 
+  // Filled part of a range track (styled via --fill in blocker.css)
+  function setRangeFill(input, percent) {
+    input.style.setProperty("--fill", `${Math.max(0, Math.min(100, percent))}%`);
+  }
+  setRangeFill(volumeSlider, volumeSlider.value * 100);
+
   // Volume slider event listener
   volumeSlider.addEventListener("input", (e) => {
     const volume = e.target.value;
     musicAudio.volume = volume;
     localStorage.setItem("musicVolume", volume);
+    setRangeFill(volumeSlider, volume * 100);
   });
 
   // Loop button event listener
@@ -2293,18 +2390,43 @@ document.addEventListener("DOMContentLoaded", () => {
     localStorage.setItem("musicLoop", isLooping);
   });
 
+  const musicContent = document.querySelector(".music-player-content");
+  const timeCurrent = document.getElementById("music-time-current");
+  const timeTotal = document.getElementById("music-time-total");
+  const libraryCount = document.getElementById("library-count");
+
+  function formatTime(seconds) {
+    if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
+    const s = Math.floor(seconds);
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = String(s % 60).padStart(2, "0");
+    return h ? `${h}:${String(m).padStart(2, "0")}:${sec}` : `${m}:${sec}`;
+  }
+
+  function updateProgressUi() {
+    const duration = musicAudio.duration;
+    const progress = duration ? (musicAudio.currentTime / duration) * 100 : 0;
+    musicProgressBar.value = progress;
+    setRangeFill(musicProgressBar, progress);
+    if (timeCurrent) timeCurrent.textContent = formatTime(musicAudio.currentTime);
+    if (timeTotal) timeTotal.textContent = formatTime(duration);
+  }
+
   // Update progress bar as song plays
-  musicAudio.addEventListener("timeupdate", () => {
-    if (musicAudio.duration) {
-      const progress = (musicAudio.currentTime / musicAudio.duration) * 100;
-      musicProgressBar.value = progress;
-    }
-  });
+  musicAudio.addEventListener("timeupdate", updateProgressUi);
+  musicAudio.addEventListener("loadedmetadata", updateProgressUi);
+  musicAudio.addEventListener("emptied", updateProgressUi);
+
+  // Equalizer animation on the cover while playing
+  musicAudio.addEventListener("play", () => musicContent?.classList.add("is-playing"));
+  musicAudio.addEventListener("pause", () => musicContent?.classList.remove("is-playing"));
 
   // Seek on progress bar click
   musicProgressBar.addEventListener("input", (e) => {
     const seekTime = (e.target.value / 100) * musicAudio.duration;
-    musicAudio.currentTime = seekTime;
+    if (Number.isFinite(seekTime)) musicAudio.currentTime = seekTime;
+    setRangeFill(musicProgressBar, e.target.value);
   });
 
   // Fetch music files from GitHub
@@ -2313,7 +2435,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const response = await fetch(
         "https://api.github.com/repos/reapertakumi/YouTube-Study-Enhancer/contents/music",
       );
-      const files = await response.json();
+      const files = response.ok ? await response.json() : [];
 
       // Filter for audio files and get their download URLs
       const githubFiles = files
@@ -2340,15 +2462,22 @@ document.addEventListener("DOMContentLoaded", () => {
         lastPlayed: lastPlayedData[file.id] || 0,
       }));
 
+      // Release blob URLs from a previous load before replacing them
+      musicFiles.forEach((file) => {
+        if (file.isUploaded && file.url) URL.revokeObjectURL(file.url);
+      });
+
       // Combine GitHub and uploaded files
       musicFiles = [...githubFiles, ...uploadedMusic];
 
       // Sort by last played (most recent first)
       musicFiles.sort((a, b) => b.lastPlayed - a.lastPlayed);
 
+      populateSongList();
       if (musicFiles.length > 0) {
-        loadTrack(currentTrackIndex);
-        populateSongList();
+        loadTrack(Math.min(currentTrackIndex, musicFiles.length - 1));
+      } else {
+        songTitle.textContent = "No music yet";
       }
     } catch (error) {
       console.error("Error fetching music files:", error);
@@ -2358,10 +2487,20 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function populateSongList() {
     songList.innerHTML = "";
+    if (libraryCount) libraryCount.textContent = musicFiles.length ? String(musicFiles.length) : "";
+    if (musicFiles.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "song-list-empty";
+      empty.textContent = "No songs yet. Use Add to upload your own music.";
+      songList.appendChild(empty);
+    }
     musicFiles.forEach((track, index) => {
       const songItem = document.createElement("div");
       songItem.className = "song-item";
-      songItem.innerHTML = `<span class="song-name">${track.name}</span>`;
+      const nameSpan = document.createElement("span");
+      nameSpan.className = "song-name";
+      nameSpan.textContent = track.name; // file names are untrusted: no innerHTML
+      songItem.appendChild(nameSpan);
       songItem.dataset.index = index;
 
       // Add delete button for all songs
@@ -2437,27 +2576,26 @@ document.addEventListener("DOMContentLoaded", () => {
     currentTrackIndex = index;
     const track = musicFiles[currentTrackIndex];
     musicAudio.src = track.url;
-    songTitle.innerHTML = `<span class="currently-playing-label">Currently playing</span><br>${track.name}`;
+    songTitle.replaceChildren();
+    const label = document.createElement("span");
+    label.className = "currently-playing-label";
+    label.textContent = "Currently playing";
+    songTitle.append(label, document.createElement("br"), track.name);
 
-    // Update last played time
+    // Update last played time (used to order the library the next time it loads).
+    // The list is NOT re-sorted here: doing so moved the current song to the top,
+    // which made "next" bounce between the same two songs forever.
     const songKey = track.isUploaded ? track.id : track.originalName;
     lastPlayedData[songKey] = Date.now();
     localStorage.setItem("lastPlayed", JSON.stringify(lastPlayedData));
     track.lastPlayed = lastPlayedData[songKey];
 
-    // Re-sort library by last played (most recent first)
-    musicFiles.sort((a, b) => b.lastPlayed - a.lastPlayed);
-
-    // Update current index after sorting
-    currentTrackIndex = musicFiles.findIndex((t) => t === track);
-
     updateActiveSong();
-    populateSongList();
 
     if (isPlaying) {
       musicAudio
         .play()
-        .catch((err) => console.log("Error playing audio:", err));
+        .catch((err) => console.warn("Error playing audio:", err));
     }
   }
 
@@ -2471,7 +2609,7 @@ document.addEventListener("DOMContentLoaded", () => {
     } else {
       musicAudio
         .play()
-        .catch((err) => console.log("Error playing audio:", err));
+        .catch((err) => console.warn("Error playing audio:", err));
       playBtn.innerHTML =
         '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>';
     }
@@ -2511,18 +2649,20 @@ document.addEventListener("DOMContentLoaded", () => {
     musicUploader.addEventListener("change", async (e) => {
       const files = e.target.files;
       if (files.length > 0) {
+        let firstId = null;
         for (const file of files) {
           const id =
             "music_" +
             Date.now() +
             "_" +
             Math.random().toString(36).substr(2, 9);
+          firstId = firstId || id;
           await saveMusicFile(file, id, file.name);
         }
         // Refresh the music library
         await fetchMusicFiles();
         // Play the first uploaded song
-        currentTrackIndex = musicFiles.length - files.length;
+        currentTrackIndex = Math.max(0, musicFiles.findIndex((t) => t.id === firstId));
         loadTrack(currentTrackIndex);
         if (!isPlaying) {
           togglePlay();
@@ -2533,5 +2673,23 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // Initialize music player
-  fetchMusicFiles();
+  const musicReady = fetchMusicFiles();
+
+  // --- Loading screen: wait for everything ---
+  // Background on screen + music list + all page resources (fonts, icons,
+  // Spotify embed). Capped so a slow or offline network can't trap the user.
+  if (!loadingScreenHidden) {
+    const pageLoaded = new Promise((resolve) => {
+      if (document.readyState === "complete") resolve();
+      else window.addEventListener("load", resolve, { once: true });
+    });
+    const timeout = new Promise((resolve) =>
+      setTimeout(() => resolve("timeout"), LOADING_TIMEOUT_MS),
+    );
+
+    Promise.race([
+      Promise.allSettled([backgroundReady, musicReady, pageLoaded]),
+      timeout,
+    ]).then((result) => hideLoadingScreen(result !== "timeout"));
+  }
 });

@@ -3,374 +3,226 @@
   if (window.__hotkeyListenerInstalled) return;
   window.__hotkeyListenerInstalled = true;
 
-  const storage = (typeof chrome !== 'undefined' && chrome.storage) ? chrome.storage : browser.storage;
+  const storage = chrome.storage;
   const REMOVED_SITES_KEY = "removedDefaultSites";
+  const SETTINGS_KEYS = [
+    'blockYoutube', 'instagram', 'twitter', 'tiktok', 'reddit', 'pinterest',
+    'customDomains', REMOVED_SITES_KEY, 'shorts', 'blockShortScroll', 'blockMode'
+  ];
+
+  const DEFAULT_SITES = [
+    { domain: 'youtube.com', id: 'blockYoutube', setting: 'blockYoutube' },
+    { domain: 'instagram.com', id: 'instagram', setting: 'instagram' },
+    { domain: 'twitter.com', id: 'twitter', setting: 'twitter' },
+    { domain: 'x.com', id: 'twitter', setting: 'twitter' },
+    { domain: 'tiktok.com', id: 'tiktok', setting: 'tiktok' },
+    { domain: 'reddit.com', id: 'reddit', setting: 'reddit' },
+    { domain: 'pinterest.com', id: 'pinterest', setting: 'pinterest' }
+  ];
+
+  const isYouTube = () => hostMatches(location.hostname, 'youtube.com');
+  const isShortsPage = () => isYouTube() && location.pathname.startsWith('/shorts/');
 
   // Cache storage data to reduce async calls
   let cachedSettings = null;
-  let settingsLoaded = false;
 
-  // Load all settings at once and cache them
   function loadSettings(callback) {
-    if (settingsLoaded && cachedSettings) {
-      if (callback) callback(cachedSettings);
+    if (cachedSettings) {
+      callback(cachedSettings);
       return;
     }
-
-    storage.sync.get([
-      'blockYoutube', 'instagram', 'twitter', 'tiktok', 'reddit', 'pinterest',
-      'customDomains', REMOVED_SITES_KEY, 'shorts', 'blockShortScroll'
-    ], (data) => {
+    storage.sync.get(SETTINGS_KEYS, (data) => {
       cachedSettings = data;
-      settingsLoaded = true;
-      if (callback) callback(cachedSettings);
+      callback(cachedSettings);
     });
   }
 
-  function checkAndRedirect(settings) {
-    const currentUrl = window.location.href.toLowerCase();
-    let shouldBlock = false;
+  // True when `host` is `domain` or a subdomain of it. Plain substring checks
+  // used to block e.g. netflix.com / dropbox.com for "x.com", or any URL whose
+  // query string merely mentioned a blocked domain.
+  function hostMatches(host, domain) {
+    host = String(host || '').toLowerCase().replace(/\.$/, '');
+    domain = String(domain || '').toLowerCase().trim().replace(/^www\./, '').replace(/\/.*$/, '');
+    if (!host || !domain) return false;
+    return host === domain || host.endsWith('.' + domain);
+  }
 
-    // Get removed default sites
+  function shouldBlockHost(settings, host) {
     const removedSites = settings[REMOVED_SITES_KEY] || [];
 
-    // Check default sites (skip if removed)
-    const defaultSites = [
-      { domain: 'youtube.com', enabled: settings.blockYoutube, id: 'blockYoutube' },
-      { domain: 'instagram.com', enabled: settings.instagram, id: 'instagram' },
-      { domain: 'twitter.com', enabled: settings.twitter, id: 'twitter' },
-      { domain: 'x.com', enabled: settings.twitter, id: 'twitter' },
-      { domain: 'tiktok.com', enabled: settings.tiktok, id: 'tiktok' },
-      { domain: 'reddit.com', enabled: settings.reddit, id: 'reddit' },
-      { domain: 'pinterest.com', enabled: settings.pinterest, id: 'pinterest' }
-    ];
-
-    for (const site of defaultSites) {
+    for (const site of DEFAULT_SITES) {
       if (removedSites.includes(site.id)) continue;
-      if (site.enabled && currentUrl.includes(site.domain)) {
-        shouldBlock = true;
-        break;
-      }
+      if (settings[site.setting] === true && hostMatches(host, site.domain)) return true;
     }
 
-    // Check custom domains
-    if (!shouldBlock && settings.customDomains) {
-      for (const [domain, enabled] of Object.entries(settings.customDomains)) {
-        if (enabled && currentUrl.includes(domain.toLowerCase())) {
-          shouldBlock = true;
-          break;
-        }
-      }
+    for (const [domain, enabled] of Object.entries(settings.customDomains || {})) {
+      if (enabled && hostMatches(host, domain)) return true;
     }
+    return false;
+  }
 
-    if (shouldBlock) {
-      window.location.replace(chrome.runtime.getURL('blocker.html'));
-    }
+  function checkAndRedirect(settings) {
+    if (!/^https?:$/.test(location.protocol)) return false;
+    if (!shouldBlockHost(settings, location.hostname)) return false;
+
+    const blockPage = settings.blockMode === 'simple' ? 'simple_block.html' : 'blocker.html';
+    window.location.replace(chrome.runtime.getURL(blockPage));
+    return true;
   }
 
   // Redirect YouTube Shorts to homepage when shorts blocking is enabled
   function redirectShortsToHomepage(settings) {
-    // Only run on youtube.com
-    if (!window.location.hostname.includes('youtube.com')) return;
+    if (settings.shorts === true && isShortsPage()) {
+      window.location.replace('https://www.youtube.com/');
+      return true;
+    }
+    return false;
+  }
 
-    // Check if current URL is a Shorts URL
-    if (window.location.pathname.includes('/shorts/')) {
-      if (settings.shorts === true) {
-        // Redirect to YouTube homepage
-        window.location.replace('https://www.youtube.com/');
-      }
+  // ========== SHORTS SCROLL LOCK ==========
+  const SCROLL_ALLOWED_SELECTOR = [
+    'ytd-comments', '#comments', '.ytd-comments', '[role="dialog"]', 'ytd-popup-container',
+    'ytd-notification-renderer', 'ytd-guide', 'ytd-mini-guide', '#guide', '.ytd-guide',
+    'ytd-guide-section-renderer', '#sections', 'ytd-guide-entry-renderer',
+    'ytd-guide-collapsible-section-entry-renderer', 'ytd-guide-signin-promo-renderer',
+    'tp-yt-app-drawer', '#contentContainer', '#guide-wrapper', '#guide-content', '#guide-inner-content',
+    'ytd-engagement-panel-section-list-renderer'
+  ].join(',');
+  const SCROLL_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', 'Home', 'End', ' ']);
+  const SCROLL_EVENTS = ['wheel', 'touchmove'];
+  const SCROLL_LOCK_STYLE_ID = 'yse-block-short-scroll';
+  let scrollLockActive = false;
+
+  function isInAllowedArea(target) {
+    return target instanceof Element && !!target.closest(SCROLL_ALLOWED_SELECTOR);
+  }
+
+  function preventScroll(e) {
+    if (isInAllowedArea(e.target)) return;
+    e.preventDefault();
+    e.stopPropagation();
+  }
+
+  function preventKeyScroll(e) {
+    if (!SCROLL_KEYS.has(e.key)) return;
+    const t = e.target;
+    if (t instanceof Element && (t.closest('input, textarea, [contenteditable="true"]') || isInAllowedArea(t))) return;
+    e.preventDefault();
+    e.stopPropagation();
+  }
+
+  function enableShortScrollLock() {
+    if (scrollLockActive) return; // idempotent: no duplicate listeners
+    scrollLockActive = true;
+
+    SCROLL_EVENTS.forEach(type => document.addEventListener(type, preventScroll, { passive: false, capture: true }));
+    document.addEventListener('keydown', preventKeyScroll, { capture: true });
+
+    // CSS instead of a 100ms polling interval: hides the up/down buttons even when re-rendered.
+    if (!document.getElementById(SCROLL_LOCK_STYLE_ID)) {
+      const style = document.createElement('style');
+      style.id = SCROLL_LOCK_STYLE_ID;
+      style.textContent = `
+        .navigation-container.ytd-shorts { display: none !important; }
+        ytd-shorts #shorts-container, ytd-reel-video-renderer { touch-action: none !important; }
+      `;
+      (document.head || document.documentElement).appendChild(style);
     }
   }
 
-  // Block scrolling on YouTube Shorts when blockShortScroll is enabled
+  function disableShortScrollLock() {
+    if (!scrollLockActive) return;
+    scrollLockActive = false;
+    SCROLL_EVENTS.forEach(type => document.removeEventListener(type, preventScroll, { capture: true }));
+    document.removeEventListener('keydown', preventKeyScroll, { capture: true });
+    document.getElementById(SCROLL_LOCK_STYLE_ID)?.remove();
+  }
+
   function blockShortScroll(settings) {
-    // Only run on youtube.com
-    if (!window.location.hostname.includes('youtube.com')) return;
-
-    // Check if current URL is a Shorts URL
-    if (window.location.pathname.includes('/shorts/')) {
-      if (settings.blockShortScroll === true) {
-        // Prevent scrolling by intercepting wheel and touch events
-        function preventScroll(e) {
-          // Check if the event target is within the comments panel or other scrollable areas
-          const commentsPanel = e.target.closest('ytd-comments') ||
-                               e.target.closest('#comments') ||
-                               e.target.closest('.ytd-comments') ||
-                               e.target.closest('[role="dialog"]') ||
-                               e.target.closest('ytd-popup-container') ||
-                               e.target.closest('ytd-notification-renderer') ||
-                               e.target.closest('ytd-guide') ||
-                               e.target.closest('ytd-mini-guide') ||
-                               e.target.closest('#guide') ||
-                               e.target.closest('.ytd-guide') ||
-                               e.target.closest('ytd-guide-section-renderer') ||
-                               e.target.closest('#sections') ||
-                               e.target.closest('.ytd-guide-section-renderer') ||
-                               e.target.closest('ytd-guide-entry-renderer') ||
-                               e.target.closest('ytd-guide-collapsible-section-entry-renderer') ||
-                               e.target.closest('ytd-guide-signin-promo-renderer') ||
-                               e.target.closest('tp-yt-app-drawer') ||
-                               e.target.closest('#contentContainer') ||
-                               e.target.closest('#guide-wrapper') ||
-                               e.target.closest('#guide-content') ||
-                               e.target.closest('#guide-inner-content');
-
-          // Allow scrolling in comments panel, dialogs, notifications, and sidebar
-          if (commentsPanel) {
-            return;
-          }
-
-          e.preventDefault();
-          e.stopPropagation();
-          return false;
-        }
-
-        // Block keyboard navigation (arrow keys, space, etc.)
-        function preventKeyScroll(e) {
-          const scrollKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'PageUp', 'PageDown', 'Home', 'End'];
-
-          // Check if the event target is within the comments panel or other scrollable areas
-          const commentsPanel = e.target.closest('ytd-comments') ||
-                               e.target.closest('#comments') ||
-                               e.target.closest('.ytd-comments') ||
-                               e.target.closest('[role="dialog"]') ||
-                               e.target.closest('ytd-popup-container') ||
-                               e.target.closest('ytd-notification-renderer') ||
-                               e.target.closest('ytd-guide') ||
-                               e.target.closest('ytd-mini-guide') ||
-                               e.target.closest('#guide') ||
-                               e.target.closest('.ytd-guide') ||
-                               e.target.closest('ytd-guide-section-renderer') ||
-                               e.target.closest('#sections') ||
-                               e.target.closest('.ytd-guide-section-renderer') ||
-                               e.target.closest('ytd-guide-entry-renderer') ||
-                               e.target.closest('ytd-guide-collapsible-section-entry-renderer') ||
-                               e.target.closest('ytd-guide-signin-promo-renderer') ||
-                               e.target.closest('tp-yt-app-drawer') ||
-                               e.target.closest('#contentContainer') ||
-                               e.target.closest('#guide-wrapper') ||
-                               e.target.closest('#guide-content') ||
-                               e.target.closest('#guide-inner-content') ||
-                               e.target.closest('input') ||
-                               e.target.closest('textarea');
-
-          // Allow keyboard navigation in comments panel, dialogs, notifications, sidebar, and input fields
-          if (commentsPanel) {
-            return;
-          }
-
-          if (scrollKeys.includes(e.key)) {
-            e.preventDefault();
-            e.stopPropagation();
-            return false;
-          }
-        }
-
-        // Get the shorts container
-        const shortsContainer = document.querySelector('ytd-reel-video-renderer') || document.querySelector('#shorts-container') || document.body;
-
-        // Block mouse wheel scrolling on document (to catch events before YouTube handles them)
-        document.addEventListener('wheel', preventScroll, { passive: false, capture: true });
-        document.addEventListener('mousewheel', preventScroll, { passive: false, capture: true });
-
-        // Block touch scrolling on document (to catch events before YouTube handles them)
-        document.addEventListener('touchstart', preventScroll, { passive: false, capture: true });
-        document.addEventListener('touchmove', preventScroll, { passive: false, capture: true });
-        document.addEventListener('touchend', preventScroll, { passive: false, capture: true });
-
-        // Block keyboard navigation on document (to catch events before YouTube handles them)
-        document.addEventListener('keydown', preventKeyScroll, { capture: true });
-
-        // Block swipe gestures on the shorts container
-        if (shortsContainer !== document.body) {
-          shortsContainer.style.overflow = 'hidden';
-          shortsContainer.style.touchAction = 'none';
-        }
-
-        // Hide the navigation container
-        const navigationContainer = document.querySelector('.navigation-container.style-scope.ytd-shorts');
-        if (navigationContainer) {
-          navigationContainer.style.display = 'none';
-        }
-
-        // Continuously hide the container in case it gets re-rendered
-        const hideNavigationInterval = setInterval(() => {
-          const navigationContainer = document.querySelector('.navigation-container.style-scope.ytd-shorts');
-          if (navigationContainer) {
-            navigationContainer.style.display = 'none';
-          }
-        }, 100);
-
-        // Store references for cleanup
-        window._blockShortScroll = {
-          preventScroll,
-          preventKeyScroll,
-          hideNavigationInterval,
-          shortsContainer
-        };
-      } else {
-        // If not on shorts URL, cleanup any active blocking
-        cleanupBlockShortScroll();
-      }
+    if (settings.blockShortScroll === true && isShortsPage()) {
+      enableShortScrollLock();
     } else {
-      // If not on shorts URL, cleanup any active blocking
-      cleanupBlockShortScroll();
+      disableShortScrollLock();
     }
   }
 
-  // Centralized cleanup function for blockShortScroll
-  function cleanupBlockShortScroll() {
-    if (window._blockShortScroll) {
-      const { preventScroll, preventKeyScroll, hideNavigationInterval, shortsContainer } = window._blockShortScroll;
-
-      // Remove event listeners from document
-      document.removeEventListener('wheel', preventScroll, { capture: true });
-      document.removeEventListener('mousewheel', preventScroll, { capture: true });
-      document.removeEventListener('touchstart', preventScroll, { capture: true });
-      document.removeEventListener('touchmove', preventScroll, { capture: true });
-      document.removeEventListener('touchend', preventScroll, { capture: true });
-      document.removeEventListener('keydown', preventKeyScroll, { capture: true });
-
-      // Restore shorts container styles
-      if (shortsContainer && shortsContainer !== document.body) {
-        shortsContainer.style.overflow = '';
-        shortsContainer.style.touchAction = '';
-      }
-
-      // Clear interval
-      clearInterval(hideNavigationInterval);
-
-      window._blockShortScroll = null;
-    }
-
-    // Show the navigation container again
-    const navigationContainer = document.querySelector('.navigation-container.style-scope.ytd-shorts');
-    if (navigationContainer) {
-      navigationContainer.style.display = '';
-    }
+  function applyAll() {
+    loadSettings((settings) => {
+      if (checkAndRedirect(settings)) return;
+      if (redirectShortsToHomepage(settings)) return;
+      blockShortScroll(settings);
+    });
   }
 
-  // Run initial checks with cached settings
-  loadSettings((settings) => {
-    checkAndRedirect(settings);
-    redirectShortsToHomepage(settings);
-    blockShortScroll(settings);
-  });
+  applyAll();
 
-  // Handle SPA navigation (Instagram, YouTube, etc.)
+  // ========== SPA NAVIGATION ==========
+  // Previously a MutationObserver over the whole document ran on every DOM change
+  // of every page. The Navigation API fires only when the URL actually changes.
   let lastUrl = location.href;
-  const observer = new MutationObserver(() => {
-    const url = location.href;
-    if (url !== lastUrl) {
-      lastUrl = url;
-      setTimeout(() => {
-        loadSettings((settings) => {
-          checkAndRedirect(settings);
-          redirectShortsToHomepage(settings);
-          blockShortScroll(settings);
-        });
-      }, 100);
-    }
-  });
-  observer.observe(document, { subtree: true, childList: true });
+  function onPossibleUrlChange() {
+    if (location.href === lastUrl) return;
+    lastUrl = location.href;
+    applyAll();
+  }
 
-  window.addEventListener('popstate', () => {
-    setTimeout(() => {
-      loadSettings((settings) => {
-        checkAndRedirect(settings);
-        redirectShortsToHomepage(settings);
-        blockShortScroll(settings);
-      });
-    }, 100);
-  });
+  if (window.navigation && typeof window.navigation.addEventListener === 'function') {
+    window.navigation.addEventListener('currententrychange', onPossibleUrlChange);
+  } else {
+    setInterval(onPossibleUrlChange, 500);
+  }
+  window.addEventListener('popstate', onPossibleUrlChange);
 
-  // ========== OPTIMIZED GLOBAL HOTKEY LISTENER ==========
+  // ========== GLOBAL HOTKEY LISTENER ==========
   let cachedHotkeys = [];
   let hotkeysLoaded = false;
   let isProcessingHotkey = false;
 
-  // Load hotkeys once and cache them
-  function loadHotkeys() {
-    if (hotkeysLoaded) return;
-    
-    storage.sync.get(['hotkeys'], (data) => {
-      cachedHotkeys = data.hotkeys || [];
-      hotkeysLoaded = true;
-    });
-  }
+  storage.sync.get(['hotkeys'], (data) => {
+    cachedHotkeys = data.hotkeys || [];
+    hotkeysLoaded = true;
+  });
 
-  // Check if a combo matches any stored hotkey
-  function isRegisteredHotkey(combo) {
-    return cachedHotkeys.some(hk => hk.key === combo);
-  }
-
-  // Load hotkeys on page load
-  loadHotkeys();
-
-  // Reload hotkeys when storage changes (user updates preferences)
-  if (storage.onChanged) {
-    storage.onChanged.addListener((changes, area) => {
-      if (area === 'sync' && changes.hotkeys) {
-        cachedHotkeys = changes.hotkeys.newValue || [];
-      }
-      // Invalidate settings cache when any relevant setting changes
-      if (area === 'sync' && (changes.blockYoutube || changes.instagram || changes.twitter ||
-          changes.tiktok || changes.reddit || changes.pinterest || changes.customDomains ||
-          changes[REMOVED_SITES_KEY] || changes.shorts || changes.blockShortScroll)) {
-        settingsLoaded = false;
-        cachedSettings = null;
-        // Reload and re-apply with new settings
-        loadSettings((settings) => {
-          checkAndRedirect(settings);
-          redirectShortsToHomepage(settings);
-          blockShortScroll(settings);
-        });
-      }
-    });
-  }
+  storage.onChanged.addListener((changes, area) => {
+    if (area !== 'sync') return;
+    if (changes.hotkeys) {
+      cachedHotkeys = changes.hotkeys.newValue || [];
+    }
+    if (SETTINGS_KEYS.some(key => key in changes)) {
+      cachedSettings = null;
+      applyAll();
+    }
+  });
 
   window.addEventListener('keydown', (e) => {
-    // Ignore typing in input fields
-    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable)) return;
-    
-    // Prevent duplicate processing of the same keydown event
-    if (isProcessingHotkey) return;
-    
-    // Only process if hotkeys are loaded
-    if (!hotkeysLoaded) return;
+    const t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+    if (isProcessingHotkey || !hotkeysLoaded || cachedHotkeys.length === 0) return;
 
     const combo = normalizeKeyCombo(e);
     if (!combo) return;
 
-    // ONLY proceed if this is a registered hotkey
-    if (!isRegisteredHotkey(combo)) return;
-
-    // Mark as processing to prevent duplicates
-    isProcessingHotkey = true;
-
-    // Find and execute the matching hotkey
     const match = cachedHotkeys.find(hk => hk.key === combo);
-    if (match && match.url) {
-      try {
-        chrome.runtime.sendMessage({ action: 'openHotkeyUrl', url: match.url });
-      } catch (err) {
-        console.error('[YouTube Study Enhancer] sendMessage failed:', err);
-      }
+    if (!match || !match.url) return;
+
+    // Stop the page / browser from also acting on the shortcut
+    e.preventDefault();
+    e.stopPropagation();
+
+    isProcessingHotkey = true;
+    try {
+      chrome.runtime.sendMessage({ action: 'openHotkeyUrl', url: match.url });
+    } catch (err) {
+      // Extension context invalidated (extension reloaded) - ignore
     }
-    
-    // Reset processing flag after a short delay
-    setTimeout(() => {
-      isProcessingHotkey = false;
-    }, 100);
+    setTimeout(() => { isProcessingHotkey = false; }, 100);
   }, { capture: true });
 
+  // Must produce the same strings as normalizeKeyCombo in popup.js (where hotkeys are recorded)
   function normalizeKeyCombo(e) {
-    const modMap = {
-      'Control': 'Ctrl',
-      'Alt': 'Alt',
-      'Shift': 'Shift',
-      'Meta': 'Meta'
-    };
+    if (!e.key) return null;
+    const modifierKeys = ['Control', 'Alt', 'Shift', 'Meta'];
+    if (modifierKeys.includes(e.key)) return null;
 
     const heldMods = [];
     if (e.ctrlKey) heldMods.push('Ctrl');
@@ -378,23 +230,8 @@
     if (e.metaKey) heldMods.push('Meta');
     if (e.shiftKey) heldMods.push('Shift');
 
-    let key = e.key;
-    if (key.length === 1) {
-      key = key.toUpperCase();
-    }
-
-    if (modMap[key] && heldMods.length === 1) {
-      return modMap[key];
-    }
-
-    if (modMap[key]) {
-      return heldMods.join('+');
-    }
-
-    if (heldMods.length === 0) {
-      return key;
-    }
-
+    const key = e.key.length === 1 ? e.key.toUpperCase() : e.key;
+    if (heldMods.length === 0) return key.length === 1 ? key : null;
     return heldMods.join('+') + '+' + key;
   }
 })();
